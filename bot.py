@@ -3,6 +3,10 @@ import yt_dlp
 
 app = Flask(__name__)
 
+@app.route('/')
+def home():
+    return "البوت شغال! استخدم /get_links?url=رابط_اليوتيوب"
+
 @app.route('/get_links', methods=['GET'])
 def get_links():
     url = request.args.get('url')
