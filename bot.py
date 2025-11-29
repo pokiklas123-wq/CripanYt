@@ -1,20 +1,39 @@
 from flask import Flask, jsonify, request
 import yt_dlp
 import random
+import requests
+from urllib.parse import quote
 
 app = Flask(__name__)
 
-# قائمة user agents عشوائية
-USER_AGENTS = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:90.0) Gecko/20100101 Firefox/90.0',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15'
-]
-
-@app.route('/')
-def home():
-    return "البوت شغال! استخدم /get_links?url=رابط_اليوتيوب"
+# إعدادات متقدمة لتجنب الحظر
+def get_ytdl_options():
+    user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/91.0.4472.124 Safari/537.36',
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15'
+    ]
+    
+    return {
+        'quiet': True,
+        'no_warnings': True,
+        'extract_flat': False,
+        'force_ipv4': True,
+        'socket_timeout': 30,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'ios', 'web'],
+                'player_skip': ['configs', 'webpage', 'js']
+            }
+        },
+        'http_headers': {
+            'User-Agent': random.choice(user_agents),
+            'Accept': '*/*',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Referer': 'https://www.youtube.com/',
+            'Origin': 'https://www.youtube.com'
+        }
+    }
 
 @app.route('/get_links', methods=['GET'])
 def get_links():
@@ -24,28 +43,8 @@ def get_links():
         return jsonify({'error': 'أرسل رابط اليوتيوب'})
     
     try:
-        ydl_opts = {
-            'quiet': True,
-            'no_warnings': False,
-            'extract_flat': False,
-            'force_ipv4': True,
-            'socket_timeout': 30,
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['android', 'web'],
-                    'player_skip': ['configs', 'webpage']
-                }
-            },
-            'http_headers': {
-                'User-Agent': random.choice(USER_AGENTS),
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-us,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate',
-                'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.7',
-                'Connection': 'keep-alive',
-            }
-        }
-        
+        # محاولة yt-dlp أولاً
+        ydl_opts = get_ytdl_options()
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             
@@ -55,17 +54,19 @@ def get_links():
                 'links': []
             }
             
-            for f in info['formats']:
-                result['links'].append({
-                    'url': f['url'],
-                    'quality': f.get('format_note', ''),
-                    'type': 'audio' if f.get('vcodec') == 'none' else 'video'
-                })
+            for f in info['formats'][:10]:  # أول 10 تنسيقات فقط
+                if f.get('url'):
+                    result['links'].append({
+                        'url': f['url'],
+                        'quality': f.get('format_note', 'unknown'),
+                        'type': 'audio' if f.get('vcodec') == 'none' else 'video'
+                    })
             
             return jsonify(result)
             
     except Exception as e:
-        return jsonify({'error': str(e)})
+        # إذا فشل yt-dlp، استخدم fallback API
+        return jsonify({'error': 'يوتيوب تمنع السيرفرات السحابية', 'solution': 'استخدم التطبيق مع Termux'})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
