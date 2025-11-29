@@ -1,31 +1,23 @@
 from flask import Flask, jsonify, request
 import yt_dlp
-import random
+import os
 
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "✅ البوت شغال على Railway! استخدم /get_links?url=رابط_اليوتيوب"
+    return "✅ البوت شغال على Railway!"
 
 @app.route('/get_links', methods=['GET'])
 def get_links():
-    url = request.args.get('url')
-    
-    if not url:
-        return jsonify({'error': 'أرسل رابط اليوتيوب'})
-    
     try:
+        url = request.args.get('url')
+        if not url:
+            return jsonify({'error': 'أرسل رابط اليوتيوب'})
+        
         ydl_opts = {
             'quiet': True,
             'no_warnings': True,
-            'extract_flat': False,
-            'socket_timeout': 30,
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': '*/*',
-                'Accept-Language': 'en-US,en;q=0.5'
-            }
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -37,7 +29,7 @@ def get_links():
                 'links': []
             }
             
-            for f in info['formats'][:15]:  # أول 15 تنسيق فقط
+            for f in info['formats'][:10]:
                 if f.get('url'):
                     result['links'].append({
                         'url': f['url'],
@@ -51,4 +43,5 @@ def get_links():
         return jsonify({'error': str(e)})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
