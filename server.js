@@ -1,68 +1,128 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const cors = require('cors');
 const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
+
+// 1. إعدادات CORS للسماح بالاتصال من أي نطاق
 const io = new Server(server, {
-  cors: { origin: "*" }
+  cors: {
+    origin: "*", // يمكنك تحديد نطاقات محددة لاحقاً
+    methods: ["GET", "POST"]
+  }
 });
 
-app.use(express.static(__dirname));
+// 2. خدمة الملفات الثابتة (HTML, CSS, JS)
+app.use(cors());
+app.use(express.static(path.join(__dirname, 'public')));
 
-const users = {}; // تخزين جميع المستخدمين
+// 3. تخزين المستخدمين والقنوات
+const channels = new Map(); // channelId -> { users: [] }
 
+// 4. معالجة اتصالات Socket.io
 io.on('connection', (socket) => {
   console.log('✅ مستخدم متصل:', socket.id);
-  users[socket.id] = { socketId: socket.id };
 
-  // 1. انضم إلى غرفة
-  socket.on('join-room', (roomId, userId) => {
-    socket.join(roomId);
-    users[socket.id].roomId = roomId;
-    users[socket.id].userId = userId;
+  // الانضمام إلى قناة
+  socket.on('join-channel', (data) => {
+    const { channelId, userId, isSpeaker } = data;
     
-    console.log(`👤 ${userId} انضم للغرفة ${roomId}`);
+    socket.join(channelId);
     
-    // إعلام الآخرين في الغرفة
-    socket.to(roomId).emit('user-connected', userId, socket.id);
+    // إضافة المستخدم إلى القناة
+    if (!channels.has(channelId)) {
+      channels.set(channelId, { users: [] });
+    }
     
-    // إرسال قائمة المستخدمين الحاليين
-    const roomUsers = Object.values(users)
-      .filter(u => u.roomId === roomId)
-      .map(u => ({ userId: u.userId, socketId: u.socketId }));
+    const channel = channels.get(channelId);
+    const userExists = channel.users.find(u => u.socketId === socket.id);
     
-    io.to(roomId).emit('room-users', roomUsers);
-  });
-
-  // 2. نقل إشارات WebRTC بين المستخدمين
-  socket.on('signal', (data) => {
-    const { to, signal, from, type } = data;
-    console.log(`📡 إشارة ${type} من ${from} إلى ${to}`);
-    
-    if (users[to]) {
-      io.to(to).emit('signal', {
-        from: socket.id,
-        to: to,
-        signal: signal,
-        type: type
+    if (!userExists) {
+      channel.users.push({
+        socketId: socket.id,
+        userId,
+        isSpeaker,
+        channelId
       });
     }
+    
+    // إعلام الآخرين بانضمام مستخدم جديد
+    socket.to(channelId).emit('user-joined', {
+      userId,
+      isSpeaker,
+      socketId: socket.id
+    });
+    
+    // إرسال قائمة المستخدمين للمستخدم الجديد
+    io.to(socket.id).emit('channel-users', channel.users);
+    
+    console.log(`👤 ${userId} انضم للقناة ${channelId}`);
   });
 
-  // 3. عند المغادرة
+  // نقل إشارات WebRTC بين المستخدمين
+  socket.on('webrtc-signal', (data) => {
+    const { to, signal, type } = data;
+    
+    // إرسال الإشارة إلى المستخدم الهدف
+    io.to(to).emit('webrtc-signal', {
+      from: socket.id,
+      signal: signal,
+      type: type
+    });
+  });
+
+  // إرسال رسالة دردشة
+  socket.on('chat-message', (data) => {
+    const { channelId, message, userId } = data;
+    socket.to(channelId).emit('chat-message', {
+      userId,
+      message,
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  // عند مغادرة المستخدم
   socket.on('disconnect', () => {
-    const user = users[socket.id];
-    if (user && user.roomId) {
-      socket.to(user.roomId).emit('user-disconnected', socket.id);
-      delete users[socket.id];
-      console.log(`❌ ${socket.id} غادر`);
-    }
+    // البحث عن المستخدم في جميع القنوات وإزالته
+    channels.forEach((channel, channelId) => {
+      const userIndex = channel.users.findIndex(u => u.socketId === socket.id);
+      
+      if (userIndex !== -1) {
+        const user = channel.users[userIndex];
+        channel.users.splice(userIndex, 1);
+        
+        // إعلام الآخرين بمغادرة المستخدم
+        io.to(channelId).emit('user-left', {
+          userId: user.userId,
+          socketId: socket.id
+        });
+        
+        console.log(`❌ ${user.userId} غادر القناة ${channelId}`);
+      }
+    });
   });
 });
 
-const PORT = 3000;
+// 5. مسار للتحقق من حالة الخادم
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'active', 
+    channels: Array.from(channels.keys()),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// 6. المسار الرئيسي
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// 7. تشغيل الخادم
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`🚀 الخادم يعمل: http://localhost:${PORT}`);
+  console.log(`🚀 الخادم يعمل على المنفذ: ${PORT}`);
+  console.log(`🌐 افتح المتصفح: http://localhost:${PORT}`);
 });
