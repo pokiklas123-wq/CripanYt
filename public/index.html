@@ -2,142 +2,224 @@
 <html dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>WebRTC تجربة فيديو حقيقي</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام البث المباشر</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/dist/simplepeer.min.js"></script>
     <style>
         * { box-sizing: border-box; }
-        body { font-family: Arial; margin: 0; padding: 20px; background: #f5f5f5; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        
-        .control-panel {
-            background: white;
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
             padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
         }
-        
-        input, select, button {
-            padding: 12px;
-            margin: 5px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 16px;
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
         }
-        
-        button {
-            background: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
-            transition: background 0.3s;
+        h1 {
+            color: #2d3748;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
         }
-        
-        button:hover { background: #45a049; }
-        button.danger { background: #f44336; }
-        button.danger:hover { background: #d32f2f; }
-        
-        .video-container {
+        .control-panel {
+            background: #f7fafc;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            border: 2px solid #e2e8f0;
+        }
+        .input-group {
             display: flex;
             flex-wrap: wrap;
             gap: 15px;
-            margin-top: 20px;
+            align-items: center;
+            margin-bottom: 20px;
         }
-        
+        input, select, button {
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #cbd5e0;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            min-width: 150px;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        button.danger {
+            background: linear-gradient(135deg, #f56565 0%, #c53030 100%);
+        }
+        .video-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 25px;
+            margin-top: 30px;
+        }
         .video-box {
-            background: #333;
-            border-radius: 8px;
+            background: #2d3748;
+            border-radius: 15px;
             overflow: hidden;
             position: relative;
-            min-width: 300px;
-            flex: 1;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
-        
-        .video-box video {
+        video {
             width: 100%;
             height: auto;
             display: block;
+            background: #000;
         }
-        
         .video-label {
             position: absolute;
-            top: 10px;
-            left: 10px;
+            top: 15px;
+            left: 15px;
             background: rgba(0,0,0,0.7);
             color: white;
-            padding: 5px 10px;
-            border-radius: 5px;
+            padding: 8px 15px;
+            border-radius: 8px;
             font-size: 14px;
+            backdrop-filter: blur(10px);
         }
-        
+        .users-panel {
+            background: #f7fafc;
+            padding: 25px;
+            border-radius: 15px;
+            margin-top: 30px;
+        }
         .user-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .user-card {
             background: white;
             padding: 15px;
             border-radius: 10px;
-            margin-top: 20px;
+            border-left: 5px solid #48bb78;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+            min-width: 200px;
         }
-        
-        .user-item {
-            padding: 10px;
-            border-bottom: 1px solid #eee;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .user-card.speaker {
+            border-left-color: #ed8936;
         }
-        
-        .status {
+        .status-indicator {
             display: inline-block;
             width: 12px;
             height: 12px;
             border-radius: 50%;
-            margin-right: 8px;
+            margin-right: 10px;
         }
-        
-        .status.connected { background: #4CAF50; }
-        .status.disconnected { background: #f44336; }
+        .status-online { background: #48bb78; }
+        .status-speaking { background: #ed8936; }
+        .chat-box {
+            margin-top: 30px;
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        }
+        #messages {
+            height: 200px;
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            background: #f7fafc;
+        }
+        .message {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            background: white;
+            border: 1px solid #e2e8f0;
+        }
+        .message-sender {
+            font-weight: bold;
+            color: #4a5568;
+        }
+        @media (max-width: 768px) {
+            .container { padding: 20px; }
+            .video-container { grid-template-columns: 1fr; }
+            .input-group { flex-direction: column; }
+            input, select, button { width: 100%; }
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🎥 تجربة WebRTC - اتصال فيديو مباشر</h1>
+        <h1>🎥 نظام البث المباشر</h1>
         
         <div class="control-panel">
-            <h3>⚙️ التحكم</h3>
-            <input type="text" id="roomId" placeholder="اسم الغرفة" value="room1">
-            <input type="text" id="userId" placeholder="اسمك">
-            <button onclick="joinRoom()">انضم للغرفة</button>
-            <button onclick="leaveRoom()" class="danger">غادر الغرفة</button>
-            <button onclick="toggleVideo()" id="toggleVideo">⏸️ إيقاف الفيديو</button>
-            <button onclick="toggleAudio()" id="toggleAudio">🔇 كتم الصوت</button>
+            <h2>⚙️ التحكم في القناة</h2>
+            <div class="input-group">
+                <input type="text" id="channelId" placeholder="اسم القناة" value="room1">
+                <input type="text" id="userId" placeholder="اسم المستخدم" value="مستخدم_">
+                <select id="userRole">
+                    <option value="speaker">🎤 مذيع</option>
+                    <option value="viewer">👀 مشاهد</option>
+                </select>
+                <button onclick="joinChannel()">انضم للقناة</button>
+                <button onclick="leaveChannel()" class="danger">غادر القناة</button>
+            </div>
+            
+            <div class="input-group">
+                <button onclick="toggleVideo()" id="toggleVideoBtn">⏸️ إيقاف الفيديو</button>
+                <button onclick="toggleAudio()" id="toggleAudioBtn">🔇 كتم الصوت</button>
+                <button onclick="toggleScreenShare()" id="screenShareBtn">🖥️ مشاركة الشاشة</button>
+            </div>
+            
+            <div id="connectionStatus" style="margin-top: 15px; padding: 10px; border-radius: 8px; background: #e6fffa; display: none;">
+                <span style="color: #234e52;">🟢 متصل بالخادم</span>
+            </div>
         </div>
         
         <div class="video-container">
-            <!-- الفيديو المحلي -->
-            <div class="video-box" id="localVideoBox">
-                <div class="video-label">أنت (محلي)</div>
+            <div class="video-box">
+                <div class="video-label">👤 أنت (محلي)</div>
                 <video id="localVideo" autoplay muted playsinline></video>
             </div>
-            
-            <!-- مكان لعرض فيديوهات الآخرين -->
-            <div id="remoteVideosContainer" class="video-container">
-                <!-- ستضاف فيديوهات الآخرين هنا تلقائياً -->
+            <div id="remoteVideos" class="video-container">
+                <!-- ستظهر فيديوهات الآخرين هنا -->
             </div>
         </div>
         
-        <div class="user-list">
-            <h3>👥 المستخدمون في الغرفة</h3>
-            <div id="usersList"></div>
+        <div class="users-panel">
+            <h2>👥 المستخدمون في القناة (<span id="usersCount">0</span>)</h2>
+            <div id="usersList" class="user-list">
+                <!-- قائمة المستخدمين -->
+            </div>
         </div>
         
-        <div style="margin-top: 20px; color: #666; font-size: 14px;">
-            <p><strong>💡 التعليمات:</strong></p>
-            <ol>
-                <li>أدخل اسمك واسم الغرفة</li>
-                <li>انقر على "انضم للغرفة" (سيطلب الإذن للكاميرا)</li>
-                <li>افتح نافذة متصفح أخرى وانضم لنفس الغرفة</li>
-                <li>سترى فيديو النافذة الأخرى هنا!</li>
-            </ol>
+        <div class="chat-box">
+            <h2>💬 دردشة القناة</h2>
+            <div id="messages"></div>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="messageInput" placeholder="اكتب رسالتك..." style="flex: 1;">
+                <button onclick="sendMessage()">إرسال</button>
+            </div>
         </div>
     </div>
 
@@ -145,37 +227,42 @@
         // المتغيرات العامة
         let socket;
         let localStream;
+        let screenStream;
         let peers = {};
-        let currentRoom = '';
+        let currentChannel = '';
         let currentUserId = '';
+        let currentRole = '';
         
-        // عناصر DOM
-        const localVideo = document.getElementById('localVideo');
-        const remoteVideosContainer = document.getElementById('remoteVideosContainer');
-        const usersList = document.getElementById('usersList');
-        
-        // 1. انضمام للغرفة
-        async function joinRoom() {
-            const roomId = document.getElementById('roomId').value;
-            const userId = document.getElementById('userId').value || `user_${Date.now()}`;
+        // 1. انضمام إلى القناة
+        async function joinChannel() {
+            const channelId = document.getElementById('channelId').value.trim();
+            const userId = document.getElementById('userId').value.trim() || `مستخدم_${Date.now()}`;
+            const role = document.getElementById('userRole').value;
             
-            if (!roomId) {
-                alert('الرجاء إدخال اسم الغرفة!');
+            if (!channelId) {
+                alert('الرجاء إدخال اسم القناة!');
                 return;
             }
             
-            currentRoom = roomId;
+            currentChannel = channelId;
             currentUserId = userId;
+            currentRole = role;
             
-            // الاتصال بخادم الإشارة
-            socket = io('http://localhost:3000');
+            // إنشاء اتصال Socket.io
+            const serverUrl = window.location.origin;
+            socket = io(serverUrl, {
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionAttempts: 5,
+                reconnectionDelay: 1000
+            });
             
-            // الحصول على الوسائط (كاميرا وصوت)
+            // طلب الوسائط (كاميرا وصوت)
             try {
-                localStream = await navigator.mediaDevices.getUserMedia({
+                const constraints = {
                     video: {
-                        width: { ideal: 640 },
-                        height: { ideal: 480 },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
                         frameRate: { ideal: 30 }
                     },
                     audio: {
@@ -183,71 +270,98 @@
                         noiseSuppression: true,
                         autoGainControl: true
                     }
-                });
+                };
                 
-                localVideo.srcObject = localStream;
-                console.log('✅ تم الحصول على الكاميرا والميكروفون');
-                
+                if (role === 'speaker') {
+                    localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    document.getElementById('localVideo').srcObject = localStream;
+                    console.log('✅ تم تفعيل الكاميرا والميكروفون');
+                }
             } catch (error) {
                 console.error('❌ خطأ في الوسائط:', error);
-                alert('تعذر الوصول إلى الكاميرا/الميكروفون. تأكد من منح التصريحات.');
+                alert('تعذر الوصول إلى الكاميرا/الميكروفون');
                 return;
             }
             
-            // انضم للغرفة عبر الخادم
-            socket.emit('join-room', roomId, userId);
-            
-            // استمع للأحداث
+            // إعداد مستمعي Socket.io
             setupSocketListeners();
             
+            // انضم للقناة
+            socket.emit('join-channel', {
+                channelId: channelId,
+                userId: userId,
+                isSpeaker: role === 'speaker'
+            });
+            
             // تحديث واجهة المستخدم
-            document.getElementById('roomId').disabled = true;
+            updateConnectionStatus(true);
+            document.getElementById('channelId').disabled = true;
             document.getElementById('userId').disabled = true;
-            updateUserList([{ userId, socketId: socket.id }]);
+            document.getElementById('userRole').disabled = true;
         }
         
         // 2. إعداد مستمعي Socket.io
         function setupSocketListeners() {
-            // عند اتصال مستخدم جديد
-            socket.on('user-connected', (userId, socketId) => {
-                console.log(`🔗 ${userId} اتصل بالغرفة`);
-                createPeer(socketId, false, userId);
-                updateUserList();
-            });
-            
             // عند استقبال قائمة المستخدمين
-            socket.on('room-users', (users) => {
-                console.log('👥 المستخدمون في الغرفة:', users);
-                updateUserList(users);
-                
-                // أنشئ اتصالاً مع كل مستخدم موجود
-                users.forEach(user => {
-                    if (user.socketId !== socket.id && !peers[user.socketId]) {
-                        createPeer(user.socketId, true, user.userId);
-                    }
-                });
+            socket.on('channel-users', (users) => {
+                console.log('👥 المستخدمون في القناة:', users);
+                updateUsersList(users);
+                createConnectionsWithUsers(users);
             });
             
-            // عند استقبال إشارة WebRTC
-            socket.on('signal', (data) => {
-                console.log(`📡 استقبلت إشارة ${data.type} من ${data.from}`);
-                
+            // عند انضمام مستخدم جديد
+            socket.on('user-joined', (userData) => {
+                console.log(`👋 ${userData.userId} انضم للقناة`);
+                addUserToList(userData);
+                if (userData.isSpeaker && userData.socketId !== socket.id) {
+                    createPeer(userData.socketId, true, userData.userId);
+                }
+            });
+            
+            // عند مغادرة مستخدم
+            socket.on('user-left', (userData) => {
+                console.log(`👋 ${userData.userId} غادر القناة`);
+                removeUserFromList(userData.socketId);
+                removePeer(userData.socketId);
+            });
+            
+            // استقبال إشارات WebRTC
+            socket.on('webrtc-signal', (data) => {
                 if (peers[data.from]) {
                     peers[data.from].peer.signal(data.signal);
                 }
             });
             
-            // عند مغادرة مستخدم
-            socket.on('user-disconnected', (socketId) => {
-                console.log(`❌ ${socketId} انقطع`);
-                removePeer(socketId);
-                updateUserList();
+            // استقبال رسائل الدردشة
+            socket.on('chat-message', (messageData) => {
+                addMessageToChat(messageData);
+            });
+            
+            // أحداث الاتصال
+            socket.on('connect', () => {
+                console.log('🔗 متصل بالخادم');
+                updateConnectionStatus(true);
+            });
+            
+            socket.on('disconnect', () => {
+                console.log('🔴 انقطع الاتصال بالخادم');
+                updateConnectionStatus(false);
             });
         }
         
-        // 3. إنشاء اتصال Peer-to-Peer جديد
+        // 3. إنشاء اتصالات WebRTC
+        function createConnectionsWithUsers(users) {
+            users.forEach(user => {
+                if (user.socketId !== socket.id && !peers[user.socketId]) {
+                    if (currentRole === 'speaker' || user.isSpeaker) {
+                        createPeer(user.socketId, currentRole === 'speaker', user.userId);
+                    }
+                }
+            });
+        }
+        
         function createPeer(targetSocketId, initiator, userId) {
-            console.log(`🔌 إنشاء اتصال مع ${userId} (مبادر: ${initiator})`);
+            console.log(`🔌 إنشاء اتصال مع ${userId}`);
             
             const peer = new SimplePeer({
                 initiator: initiator,
@@ -256,65 +370,55 @@
                 config: {
                     iceServers: [
                         { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:global.stun.twilio.com:3478' }
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun3.l.google.com:19302' },
+                        { urls: 'stun:stun4.l.google.com:19302' }
                     ]
                 }
             });
             
-            // عند توليد إشارة Offer/Answer
-            peer.on('signal', (signal) => {
-                console.log(`📤 إرسال إشارة إلى ${targetSocketId}`);
-                socket.emit('signal', {
+            peer.on('signal', signal => {
+                socket.emit('webrtc-signal', {
                     to: targetSocketId,
-                    from: socket.id,
                     signal: signal,
-                    type: signal.type || 'signal'
+                    type: signal.type
                 });
             });
             
-            // عند استقبال تيار وسائط من الطرف الآخر
-            peer.on('stream', (stream) => {
+            peer.on('stream', stream => {
                 console.log(`🎬 استقبلت فيديو من ${userId}`);
                 addRemoteVideo(stream, targetSocketId, userId);
             });
             
-            // عند حدوث خطأ
-            peer.on('error', (err) => {
-                console.error('❌ خطأ في Peer:', err);
+            peer.on('error', err => {
+                console.error('❌ خطأ في الاتصال:', err);
                 removePeer(targetSocketId);
             });
             
-            // عند إغلاق الاتصال
             peer.on('close', () => {
                 console.log(`🔒 اتصال مغلق مع ${userId}`);
                 removePeer(targetSocketId);
             });
             
-            // حفظ الـ peer
-            peers[targetSocketId] = {
-                peer: peer,
-                userId: userId,
-                videoElement: null
-            };
+            peers[targetSocketId] = { peer, userId };
         }
         
-        // 4. إضافة فيديو بعيد
+        // 4. إدارة الفيديو
         function addRemoteVideo(stream, socketId, userId) {
-            // تحقق إذا كان الفيديو موجوداً بالفعل
             const existingVideo = document.getElementById(`video-${socketId}`);
             if (existingVideo) {
                 existingVideo.srcObject = stream;
                 return;
             }
             
-            // إنشاء عنصر فيديو جديد
             const videoContainer = document.createElement('div');
             videoContainer.className = 'video-box';
             videoContainer.id = `container-${socketId}`;
             
             const label = document.createElement('div');
             label.className = 'video-label';
-            label.textContent = userId;
+            label.innerHTML = `👤 ${userId}`;
             
             const video = document.createElement('video');
             video.id = `video-${socketId}`;
@@ -324,131 +428,255 @@
             
             videoContainer.appendChild(label);
             videoContainer.appendChild(video);
-            remoteVideosContainer.appendChild(videoContainer);
-            
-            // حفظ المرجع
-            if (peers[socketId]) {
-                peers[socketId].videoElement = videoContainer;
-            }
+            document.getElementById('remoteVideos').appendChild(videoContainer);
         }
         
-        // 5. إزالة اتصال Peer
         function removePeer(socketId) {
             if (peers[socketId]) {
-                // إغلاق الاتصال
-                if (peers[socketId].peer) {
-                    peers[socketId].peer.destroy();
-                }
+                peers[socketId].peer.destroy();
+                delete peers[socketId];
                 
-                // إزالة الفيديو
                 const videoContainer = document.getElementById(`container-${socketId}`);
                 if (videoContainer) {
                     videoContainer.remove();
                 }
-                
-                // حذف من الذاكرة
-                delete peers[socketId];
             }
         }
         
-        // 6. تحديث قائمة المستخدمين
-        function updateUserList(usersArray) {
-            if (!socket) return;
-            
-            if (!usersArray) {
-                // طلب قائمة محدثة من الخادم
-                socket.emit('get-users', currentRoom);
-                return;
-            }
+        // 5. تحديث قائمة المستخدمين
+        function updateUsersList(users) {
+            const usersList = document.getElementById('usersList');
+            const usersCount = document.getElementById('usersCount');
             
             usersList.innerHTML = '';
-            usersArray.forEach(user => {
-                const userItem = document.createElement('div');
-                userItem.className = 'user-item';
-                
-                const statusSpan = document.createElement('span');
-                statusSpan.className = `status ${user.socketId === socket.id ? 'connected' : 'connected'}`;
-                
-                userItem.innerHTML = `
-                    <div>
-                        ${statusSpan.outerHTML}
-                        <strong>${user.userId}</strong>
-                        ${user.socketId === socket.id ? '(أنت)' : ''}
-                    </div>
-                    <small style="color: #666;">${user.socketId.substring(0, 8)}...</small>
-                `;
-                
-                usersList.appendChild(userItem);
+            usersCount.textContent = users.length;
+            
+            users.forEach(user => {
+                addUserToList(user);
             });
         }
         
-        // 7. مغادرة الغرفة
-        function leaveRoom() {
+        function addUserToList(user) {
+            const userCard = document.createElement('div');
+            userCard.className = `user-card ${user.isSpeaker ? 'speaker' : ''}`;
+            userCard.id = `user-${user.socketId}`;
+            
+            const statusClass = user.isSpeaker ? 'status-speaking' : 'status-online';
+            
+            userCard.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span class="status-indicator ${statusClass}"></span>
+                    <strong>${user.userId}</strong>
+                    ${user.socketId === socket.id ? '<small>(أنت)</small>' : ''}
+                </div>
+                <div style="margin-top: 8px; color: #718096; font-size: 14px;">
+                    ${user.isSpeaker ? '🎤 مذيع' : '👀 مشاهد'}
+                </div>
+            `;
+            
+            document.getElementById('usersList').appendChild(userCard);
+        }
+        
+        function removeUserFromList(socketId) {
+            const userCard = document.getElementById(`user-${socketId}`);
+            if (userCard) userCard.remove();
+        }
+        
+        // 6. إدارة الدردشة
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (message && socket) {
+                socket.emit('chat-message', {
+                    channelId: currentChannel,
+                    userId: currentUserId,
+                    message: message
+                });
+                
+                // إضافة الرسالة المحلية
+                addMessageToChat({
+                    userId: currentUserId,
+                    message: message,
+                    timestamp: new Date().toISOString()
+                });
+                
+                input.value = '';
+            }
+        }
+        
+        function addMessageToChat(messageData) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message';
+            
+            const time = new Date(messageData.timestamp).toLocaleTimeString();
+            
+            messageDiv.innerHTML = `
+                <div class="message-sender">${messageData.userId}</div>
+                <div>${messageData.message}</div>
+                <small style="color: #a0aec0;">${time}</small>
+            `;
+            
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        // 7. التحكم في الوسائط
+        async function toggleVideo() {
+            if (localStream) {
+                const videoTrack = localStream.getVideoTracks()[0];
+                if (videoTrack) {
+                    videoTrack.enabled = !videoTrack.enabled;
+                    const btn = document.getElementById('toggleVideoBtn');
+                    btn.textContent = videoTrack.enabled ? '⏸️ إيقاف الفيديو' : '▶️ تشغيل الفيديو';
+                }
+            }
+        }
+        
+        async function toggleAudio() {
+            if (localStream) {
+                const audioTrack = localStream.getAudioTracks()[0];
+                if (audioTrack) {
+                    audioTrack.enabled = !audioTrack.enabled;
+                    const btn = document.getElementById('toggleAudioBtn');
+                    btn.textContent = audioTrack.enabled ? '🔇 كتم الصوت' : '🔊 إلغاء الكتم';
+                }
+            }
+        }
+        
+        async function toggleScreenShare() {
+            const btn = document.getElementById('screenShareBtn');
+            
+            if (!screenStream) {
+                try {
+                    screenStream = await navigator.mediaDevices.getDisplayMedia({
+                        video: { cursor: "always" },
+                        audio: false
+                    });
+                    
+                    // استبدل تيار الفيديو المحلي
+                    const videoTrack = screenStream.getVideoTracks()[0];
+                    if (localStream) {
+                        const oldVideoTrack = localStream.getVideoTracks()[0];
+                        localStream.removeTrack(oldVideoTrack);
+                        localStream.addTrack(videoTrack);
+                    }
+                    
+                    btn.textContent = '🖥️ إيقاف المشاركة';
+                    btn.style.background = 'linear-gradient(135deg, #f56565 0%, #c53030 100%)';
+                    
+                    // إرسال التدفق الجديد لجميع الأقران
+                    Object.values(peers).forEach(({ peer }) => {
+                        if (peer) {
+                            peer.replaceTrack(videoTrack, localStream);
+                        }
+                    });
+                    
+                    // عند انتهاء المشاركة
+                    videoTrack.onended = () => {
+                        toggleScreenShare();
+                    };
+                    
+                } catch (error) {
+                    console.error('❌ خطأ في مشاركة الشاشة:', error);
+                }
+            } else {
+                // إعادة تفعيل الكاميرا
+                try {
+                    const cameraStream = await navigator.mediaDevices.getUserMedia({
+                        video: true
+                    });
+                    
+                    const cameraTrack = cameraStream.getVideoTracks()[0];
+                    if (localStream) {
+                        const oldVideoTrack = localStream.getVideoTracks()[0];
+                        localStream.removeTrack(oldVideoTrack);
+                        localStream.addTrack(cameraTrack);
+                    }
+                    
+                    // إرسال التدفق الجديد
+                    Object.values(peers).forEach(({ peer }) => {
+                        if (peer) {
+                            peer.replaceTrack(cameraTrack, localStream);
+                        }
+                    });
+                    
+                    // إيقاف تيار الشاشة
+                    screenStream.getTracks().forEach(track => track.stop());
+                    screenStream = null;
+                    
+                    btn.textContent = '🖥️ مشاركة الشاشة';
+                    btn.style.background = '';
+                    
+                } catch (error) {
+                    console.error('❌ خطأ في إعادة تفعيل الكاميرا:', error);
+                }
+            }
+        }
+        
+        // 8. مغادرة القناة
+        function leaveChannel() {
             if (socket) {
                 socket.disconnect();
                 socket = null;
             }
             
-            // إغلاق جميع اتصالات P2P
+            // إغلاق جميع اتصالات WebRTC
             Object.keys(peers).forEach(socketId => {
                 removePeer(socketId);
             });
             peers = {};
             
-            // إيقاف الوسائط المحلية
+            // إيقاف الوسائط
             if (localStream) {
                 localStream.getTracks().forEach(track => track.stop());
                 localStream = null;
-                localVideo.srcObject = null;
+            }
+            
+            if (screenStream) {
+                screenStream.getTracks().forEach(track => track.stop());
+                screenStream = null;
             }
             
             // إعادة تعيين واجهة المستخدم
-            document.getElementById('roomId').disabled = false;
+            document.getElementById('localVideo').srcObject = null;
+            document.getElementById('remoteVideos').innerHTML = '';
+            document.getElementById('usersList').innerHTML = '';
+            document.getElementById('messages').innerHTML = '';
+            document.getElementById('usersCount').textContent = '0';
+            
+            document.getElementById('channelId').disabled = false;
             document.getElementById('userId').disabled = false;
-            usersList.innerHTML = '';
-            remoteVideosContainer.innerHTML = '';
+            document.getElementById('userRole').disabled = false;
             
-            currentRoom = '';
-            currentUserId = '';
+            updateConnectionStatus(false);
             
-            console.log('👋 غادرت الغرفة');
+            console.log('👋 غادرت القناة');
         }
         
-        // 8. التحكم في الفيديو والصوت
-        function toggleVideo() {
-            if (localStream) {
-                const videoTrack = localStream.getVideoTracks()[0];
-                if (videoTrack) {
-                    videoTrack.enabled = !videoTrack.enabled;
-                    const btn = document.getElementById('toggleVideo');
-                    btn.textContent = videoTrack.enabled ? '⏸️ إيقاف الفيديو' : '▶️ تشغيل الفيديو';
-                    console.log(`📹 الفيديو ${videoTrack.enabled ? 'مفعّل' : 'موقف'}`);
-                }
+        // 9. تحديث حالة الاتصال
+        function updateConnectionStatus(connected) {
+            const statusDiv = document.getElementById('connectionStatus');
+            if (connected) {
+                statusDiv.style.display = 'block';
+                statusDiv.innerHTML = '<span style="color: #234e52;">🟢 متصل بالخادم</span>';
+            } else {
+                statusDiv.style.display = 'none';
             }
         }
         
-        function toggleAudio() {
-            if (localStream) {
-                const audioTrack = localStream.getAudioTracks()[0];
-                if (audioTrack) {
-                    audioTrack.enabled = !audioTrack.enabled;
-                    const btn = document.getElementById('toggleAudio');
-                    btn.textContent = audioTrack.enabled ? '🔇 كتم الصوت' : '🔊 إلغاء الكتم';
-                    console.log(`🎤 الصوت ${audioTrack.enabled ? 'مفعّل' : 'مكتوم'}`);
-                }
-            }
-        }
+        // 10. عند تحميل الصفحة
+        window.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('userId').value = `مستخدم_${Math.floor(Math.random() * 10000)}`;
+            document.getElementById('messageInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') sendMessage();
+            });
+        });
         
-        // 9. عند إغلاق الصفحة
-        window.addEventListener('beforeunload', leaveRoom);
-        window.addEventListener('pagehide', leaveRoom);
+        // 11. التنظيف عند إغلاق الصفحة
+        window.addEventListener('beforeunload', leaveChannel);
         
-        // 10. توليد اسم عشوائي عند التحميل
-        window.onload = function() {
-            const randomId = Math.floor(Math.random() * 10000);
-            document.getElementById('userId').value = `مستخدم_${randomId}`;
-            document.getElementById('roomId').focus();
-        };
     </script>
 </body>
 </html>
