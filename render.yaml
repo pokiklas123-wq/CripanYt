@@ -1,6 +1,0 @@
-services:
-  - type: web
-    name: ant-media-test
-    runtime: docker
-    plan: free
-    dockerComposePath: ./Dockerfile
