@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: ant-media-test
+    runtime: docker
+    plan: free
+    dockerComposePath: ./docker-compose.yml  # يخبر Render باستخدام docker-compose
