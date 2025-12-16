@@ -3,4 +3,4 @@ services:
     name: ant-media-test
     runtime: docker
     plan: free
-    dockerComposePath: ./docker-compose.yml
+    dockerComposePath: ./Dockerfile
