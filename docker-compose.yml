@@ -5,9 +5,7 @@ services:
     container_name: ant-media-test
     restart: unless-stopped
     ports:
-      - "5080:5080"   
-      - "5443:5443"   
-  
+      - "5080:5080"
     volumes:
       - antmedia_data:/usr/local/antmedia
 volumes:
