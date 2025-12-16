@@ -1,0 +1,9 @@
+version: '3.8'
+services:
+  antmedia:
+    image: antmedia/ant-media-server:latest
+    ports:
+      - "5080:5080"   # لوحة التحكم و WebSocket
+      - "5443:5443"   # HTTPS
+      - "1935:1935"   # RTMP الإدخال
+    restart: unless-stopped
