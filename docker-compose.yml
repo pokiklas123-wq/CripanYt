@@ -1,13 +1,14 @@
-# By default 5080 is exposed on the host network
-version : '3.4'
-
-services :
-  antmediaserver :
-    network_mode: host
-    container_name : antmediaserver
-    image : "fluential/antmediaserver:${ANTMEDIA_VERSION:-latest}"
-    volumes :
-      - datastore:/usr/local/antmedia
-    restart : always
-volumes :
-  datastore : {}
+version: '3.8'
+services:
+  ant-media-server:
+    image: antmedia/community:latest  # صورة رسمية وموثوقة
+    container_name: ant-media-test
+    restart: unless-stopped
+    ports:
+      - "5080:5080"   # لوحة التحكم الإدارية
+      - "5443:5443"   # لوحة التحكم ب HTTPS
+    # إزالة سطر network_mode: host بالكامل
+    volumes:
+      - antmedia_data:/usr/local/antmedia
+volumes:
+  antmedia_data:
