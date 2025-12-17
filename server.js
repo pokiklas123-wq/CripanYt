@@ -1,257 +1,120 @@
-// server.js
 const express = require('express');
-const http = require('http');
-const WebSocket = require('ws');
+const app = express();
+const server = require('http').createServer(app);
 const path = require('path');
 
-const app = express();
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+// تخزين بيانات البث
+let activeBroadcasts = new Map(); // roomId -> {frames: [], audio: [], lastUpdate: Date}
 
-// تخزين البث النشط
-let activeBroadcast = null;
-let viewers = new Set();
-
-// إعدادات render.com
-const PORT = process.env.PORT || 3000;
-
-// خدمة الملفات الثابتة
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.static(__dirname));
 
 // صفحة المدرس
 app.get('/teacher', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'teacher.html'));
+    res.sendFile(path.join(__dirname, 'teacher.html'));
 });
 
-// صفحة الطلاب
+// صفحة الطالب
 app.get('/student', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'student.html'));
+    res.sendFile(path.join(__dirname, 'student.html'));
 });
 
-// الصفحة الرئيسية
-app.get('/', (req, res) => {
-    res.send(`
-        <!DOCTYPE html>
-        <html lang="ar" dir="rtl">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>منصة البث المباشر</title>
-            <style>
-                body {
-                    font-family: Arial, sans-serif;
-                    text-align: center;
-                    padding: 50px;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                }
-                .container {
-                    max-width: 600px;
-                    margin: auto;
-                    background: rgba(255,255,255,0.1);
-                    padding: 30px;
-                    border-radius: 15px;
-                    backdrop-filter: blur(10px);
-                }
-                h1 { color: white; }
-                .btn {
-                    display: block;
-                    width: 80%;
-                    margin: 20px auto;
-                    padding: 20px;
-                    background: white;
-                    color: #667eea;
-                    text-decoration: none;
-                    border-radius: 10px;
-                    font-size: 20px;
-                    font-weight: bold;
-                }
-                .btn:hover {
-                    background: #f0f0f0;
-                    transform: scale(1.05);
-                }
-                .teacher { border-right: 5px solid #4CAF50; }
-                .student { border-right: 5px solid #2196F3; }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>🎓 منصة البث المباشر للتعليم</h1>
-                <p>اختر دورك:</p>
-                <a href="/teacher" class="btn teacher">👨‍🏫 الدخول كمدرس</a>
-                <a href="/student" class="btn student">👥 الدخول كمشاهد</a>
-                <p style="margin-top: 30px; color: rgba(255,255,255,0.8);">
-                    📍 الموقع: https://cripanyt.onrender.com
-                </p>
-            </div>
-        </body>
-        </html>
-    `);
-});
-
-// استقبال فريمات الفيديو
-app.post('/api/stream', (req, res) => {
-    const { frame, broadcastId } = req.body;
+// المدرس يرسل إطار فيديو
+app.post('/teacher/stream', (req, res) => {
+    const { roomId, frame, audio } = req.body;
     
-    if (frame && activeBroadcast && activeBroadcast.id === broadcastId) {
-        // بث الفريم لجميع المشاهدين
-        const message = JSON.stringify({
-            type: 'video_frame',
-            frame: frame,
-            timestamp: Date.now()
+    if (!activeBroadcasts.has(roomId)) {
+        activeBroadcasts.set(roomId, {
+            frames: [],
+            audio: [],
+            lastUpdate: Date.now(),
+            teacherActive: true
         });
-        
-        viewers.forEach(viewer => {
-            if (viewer.readyState === WebSocket.OPEN) {
-                viewer.send(message);
-            }
-        });
-        
-        res.json({ success: true, viewers: viewers.size });
-    } else {
-        res.json({ success: false, error: 'No active broadcast' });
     }
+    
+    const broadcast = activeBroadcasts.get(roomId);
+    
+    if (frame) {
+        broadcast.frames.push(frame);
+        // احتفظ بآخر 10 إطارات فقط
+        if (broadcast.frames.length > 10) {
+            broadcast.frames.shift();
+        }
+    }
+    
+    if (audio && audio.length > 0) {
+        broadcast.audio.push(audio);
+        // احتفظ بآخر 5 مقاطع صوتية فقط
+        if (broadcast.audio.length > 5) {
+            broadcast.audio.shift();
+        }
+    }
+    
+    broadcast.lastUpdate = Date.now();
+    broadcast.teacherActive = true;
+    
+    res.json({ success: true, timestamp: Date.now() });
 });
 
-// WebSocket للاتصال المباشر
-wss.on('connection', (ws, req) => {
-    console.log('🔗 اتصال جديد:', req.socket.remoteAddress);
+// الطالب يستقبل البث
+app.get('/student/stream', (req, res) => {
+    const { roomId } = req.query;
     
-    ws.on('message', (message) => {
-        try {
-            const data = JSON.parse(message);
-            
-            if (data.type === 'register_teacher') {
-                // تسجيل كمدرس
-                ws.role = 'teacher';
-                activeBroadcast = {
-                    id: data.broadcastId,
-                    teacher: ws,
-                    startedAt: Date.now(),
-                    title: data.title || 'بث مباشر'
-                };
-                
-                console.log(`🎬 البث بدأ: ${data.broadcastId}`);
-                
-                ws.send(JSON.stringify({
-                    type: 'teacher_registered',
-                    broadcastId: data.broadcastId,
-                    url: `https://cripanyt.onrender.com/student?room=${data.broadcastId}`
-                }));
-                
-            } else if (data.type === 'register_viewer') {
-                // تسجيل كمشاهد
-                ws.role = 'viewer';
-                ws.viewerId = Date.now() + Math.random().toString(36).substr(2, 9);
-                viewers.add(ws);
-                
-                console.log(`👤 مشاهد جديد: ${ws.viewerId} (العدد: ${viewers.size})`);
-                
-                // إرسال معلومات البث
-                ws.send(JSON.stringify({
-                    type: 'viewer_registered',
-                    viewerId: ws.viewerId,
-                    broadcastTitle: activeBroadcast ? activeBroadcast.title : 'بث مباشر',
-                    viewersCount: viewers.size
-                }));
-                
-                // إذا كان هناك بث نشط
-                if (activeBroadcast) {
-                    ws.send(JSON.stringify({
-                        type: 'broadcast_active',
-                        title: activeBroadcast.title,
-                        startedAt: activeBroadcast.startedAt
-                    }));
-                }
-                
-            } else if (data.type === 'audio_chunk' && ws.role === 'teacher') {
-                // بث الصوت للمشاهدين
-                viewers.forEach(viewer => {
-                    if (viewer.readyState === WebSocket.OPEN) {
-                        viewer.send(JSON.stringify({
-                            type: 'audio_data',
-                            data: data.chunk,
-                            timestamp: Date.now()
-                        }));
-                    }
-                });
-                
-            } else if (data.type === 'chat_message') {
-                // إرسال رسالة الدردشة للجميع
-                const chatMessage = JSON.stringify({
-                    type: 'chat_message',
-                    sender: data.sender || 'مجهول',
-                    message: data.message,
-                    time: new Date().toLocaleTimeString('ar-SA')
-                });
-                
-                viewers.forEach(viewer => {
-                    if (viewer.readyState === WebSocket.OPEN) {
-                        viewer.send(chatMessage);
-                    }
-                });
-                
-                if (activeBroadcast && activeBroadcast.teacher) {
-                    activeBroadcast.teacher.send(chatMessage);
-                }
-            }
-            
-        } catch (error) {
-            console.error('❌ خطأ في معالجة الرسالة:', error);
-        }
-    });
+    if (!roomId || !activeBroadcasts.has(roomId)) {
+        return res.json({
+            status: 'waiting',
+            message: 'لم يبدأ المدرس البث بعد'
+        });
+    }
     
-    ws.on('close', () => {
-        if (ws.role === 'teacher') {
-            console.log('👨‍🏫 المدرس غادر - إنهاء البث');
-            
-            // إعلام المشاهدين
-            viewers.forEach(viewer => {
-                if (viewer.readyState === WebSocket.OPEN) {
-                    viewer.send(JSON.stringify({
-                        type: 'broadcast_ended',
-                        message: 'انتهى البث المباشر'
-                    }));
-                }
-            });
-            
-            activeBroadcast = null;
-            viewers.clear();
-            
-        } else if (ws.role === 'viewer') {
-            viewers.delete(ws);
-            console.log(`👤 مشاهد غادر (العدد المتبقي: ${viewers.size})`);
-        }
-    });
+    const broadcast = activeBroadcasts.get(roomId);
+    const now = Date.now();
     
-    ws.on('error', (error) => {
-        console.error('❌ خطأ في WebSocket:', error);
+    // تحقق إذا كان المدرس لا يزال نشطاً (آخر تحديث قبل أقل من 10 ثواني)
+    if (now - broadcast.lastUpdate > 10000) {
+        broadcast.teacherActive = false;
+        return res.json({
+            status: 'ended',
+            message: 'انتهى البث أو فقد الاتصال بالمدرس'
+        });
+    }
+    
+    // إرسال أحدث إطار وصوت
+    res.json({
+        status: 'active',
+        frame: broadcast.frames.length > 0 ? broadcast.frames[broadcast.frames.length - 1] : null,
+        audio: broadcast.audio.length > 0 ? broadcast.audio[broadcast.audio.length - 1] : null,
+        timestamp: broadcast.lastUpdate,
+        frameCount: broadcast.frames.length
     });
 });
 
-// Health check لـ render.com
-app.get('/health', (req, res) => {
-    res.json({ 
-        status: 'healthy', 
-        broadcast: activeBroadcast ? 'active' : 'inactive',
-        viewers: viewers.size,
-        uptime: process.uptime()
-    });
+// المدرس يؤكد أنه لا يزال على اتصال
+app.post('/teacher/heartbeat', (req, res) => {
+    const { roomId } = req.body;
+    
+    if (roomId && activeBroadcasts.has(roomId)) {
+        activeBroadcasts.get(roomId).lastUpdate = Date.now();
+    }
+    
+    res.json({ success: true });
 });
+
+// تنظيف البث القديم (أكثر من 30 ثانية بدون تحديث)
+setInterval(() => {
+    const now = Date.now();
+    for (const [roomId, broadcast] of activeBroadcasts.entries()) {
+        if (now - broadcast.lastUpdate > 30000) {
+            activeBroadcasts.delete(roomId);
+            console.log(`تم تنظيف البث القديم: ${roomId}`);
+        }
+    }
+}, 30000);
 
 // تشغيل الخادم
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 الخادم يعمل على: https://cripanyt.onrender.com`);
-    console.log(`📞 Port: ${PORT}`);
-    console.log(`🎓 Teacher: https://cripanyt.onrender.com/teacher`);
-    console.log(`👥 Student: https://cripanyt.onrender.com/student`);
-});
-
-// إغلاق نظيف
-process.on('SIGTERM', () => {
-    console.log('🛑 إغلاق الخادم...');
-    wss.close();
-    server.close();
-    process.exit(0);
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`✅ الخادم يعمل على: http://localhost:${PORT}`);
+    console.log(`🎓 صفحة المدرس: http://localhost:${PORT}/teacher`);
+    console.log(`👥 صفحة الطلاب: http://localhost:${PORT}/student`);
 });
