@@ -1,120 +1,81 @@
 const express = require('express');
 const app = express();
-const server = require('http').createServer(app);
 const path = require('path');
 
-// تخزين بيانات البث
-let activeBroadcasts = new Map(); // roomId -> {frames: [], audio: [], lastUpdate: Date}
+// تخزين البث النشط
+let activeBroadcast = null;
+let broadcastData = {
+    frame: null,
+    lastUpdate: null,
+    teacherActive: false
+};
 
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json());
 app.use(express.static(__dirname));
 
-// صفحة المدرس
+// جميع الصفحات
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'teacher.html'));
+});
+
 app.get('/teacher', (req, res) => {
     res.sendFile(path.join(__dirname, 'teacher.html'));
 });
 
-// صفحة الطالب
 app.get('/student', (req, res) => {
     res.sendFile(path.join(__dirname, 'student.html'));
 });
 
-// المدرس يرسل إطار فيديو
-app.post('/teacher/stream', (req, res) => {
-    const { roomId, frame, audio } = req.body;
+// المدرس يرسل صورة
+app.post('/send-frame', (req, res) => {
+    const { frame, roomId } = req.body;
     
-    if (!activeBroadcasts.has(roomId)) {
-        activeBroadcasts.set(roomId, {
-            frames: [],
-            audio: [],
-            lastUpdate: Date.now(),
-            teacherActive: true
-        });
-    }
+    broadcastData.frame = frame;
+    broadcastData.lastUpdate = Date.now();
+    broadcastData.teacherActive = true;
     
-    const broadcast = activeBroadcasts.get(roomId);
-    
-    if (frame) {
-        broadcast.frames.push(frame);
-        // احتفظ بآخر 10 إطارات فقط
-        if (broadcast.frames.length > 10) {
-            broadcast.frames.shift();
-        }
-    }
-    
-    if (audio && audio.length > 0) {
-        broadcast.audio.push(audio);
-        // احتفظ بآخر 5 مقاطع صوتية فقط
-        if (broadcast.audio.length > 5) {
-            broadcast.audio.shift();
-        }
-    }
-    
-    broadcast.lastUpdate = Date.now();
-    broadcast.teacherActive = true;
-    
-    res.json({ success: true, timestamp: Date.now() });
+    res.json({ success: true, time: new Date().toLocaleTimeString() });
 });
 
-// الطالب يستقبل البث
-app.get('/student/stream', (req, res) => {
+// الطالب يجلب الصورة
+app.get('/get-frame', (req, res) => {
     const { roomId } = req.query;
     
-    if (!roomId || !activeBroadcasts.has(roomId)) {
-        return res.json({
-            status: 'waiting',
-            message: 'لم يبدأ المدرس البث بعد'
+    if (!broadcastData.teacherActive) {
+        return res.json({ 
+            status: 'waiting', 
+            message: 'انتظر حتى يبدأ المدرس البث' 
         });
     }
     
-    const broadcast = activeBroadcasts.get(roomId);
-    const now = Date.now();
-    
-    // تحقق إذا كان المدرس لا يزال نشطاً (آخر تحديث قبل أقل من 10 ثواني)
-    if (now - broadcast.lastUpdate > 10000) {
-        broadcast.teacherActive = false;
-        return res.json({
-            status: 'ended',
-            message: 'انتهى البث أو فقد الاتصال بالمدرس'
+    // إذا مر أكثر من 10 ثواني بدون تحديث
+    if (Date.now() - broadcastData.lastUpdate > 10000) {
+        broadcastData.teacherActive = false;
+        return res.json({ 
+            status: 'ended', 
+            message: 'انتهى البث' 
         });
     }
     
-    // إرسال أحدث إطار وصوت
     res.json({
         status: 'active',
-        frame: broadcast.frames.length > 0 ? broadcast.frames[broadcast.frames.length - 1] : null,
-        audio: broadcast.audio.length > 0 ? broadcast.audio[broadcast.audio.length - 1] : null,
-        timestamp: broadcast.lastUpdate,
-        frameCount: broadcast.frames.length
+        frame: broadcastData.frame,
+        lastUpdate: broadcastData.lastUpdate
     });
 });
 
-// المدرس يؤكد أنه لا يزال على اتصال
-app.post('/teacher/heartbeat', (req, res) => {
+// التحقق من حالة المدرس
+app.post('/teacher-alive', (req, res) => {
     const { roomId } = req.body;
-    
-    if (roomId && activeBroadcasts.has(roomId)) {
-        activeBroadcasts.get(roomId).lastUpdate = Date.now();
-    }
-    
-    res.json({ success: true });
+    broadcastData.lastUpdate = Date.now();
+    broadcastData.teacherActive = true;
+    res.json({ alive: true });
 });
 
-// تنظيف البث القديم (أكثر من 30 ثانية بدون تحديث)
-setInterval(() => {
-    const now = Date.now();
-    for (const [roomId, broadcast] of activeBroadcasts.entries()) {
-        if (now - broadcast.lastUpdate > 30000) {
-            activeBroadcasts.delete(roomId);
-            console.log(`تم تنظيف البث القديم: ${roomId}`);
-        }
-    }
-}, 30000);
-
-// تشغيل الخادم
+// تشغيل السيرفر
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`✅ الخادم يعمل على: http://localhost:${PORT}`);
-    console.log(`🎓 صفحة المدرس: http://localhost:${PORT}/teacher`);
-    console.log(`👥 صفحة الطلاب: http://localhost:${PORT}/student`);
+app.listen(PORT, () => {
+    console.log(`✅ السيرفر يعمل على: http://localhost:${PORT}`);
+    console.log(`🎓 المدرس: http://localhost:${PORT}/teacher`);
+    console.log(`👥 الطلاب: http://localhost:${PORT}/student`);
 });
