@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>المدرس - البث المباشر</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
+        body { margin: 0; padding: 20px; background: #f8f9fa; }
+        .container { max-width: 1200px; margin: auto; }
+        h1 { color: #2c3e50; text-align: center; margin-bottom: 30px; }
+        .main-content { display: flex; gap: 20px; flex-wrap: wrap; }
+        .video-section { flex: 2; min-width: 300px; }
+        .control-section { flex: 1; min-width: 300px; }
+        .video-container {
+            background: #000; border-radius: 10px; overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        video { width: 100%; height: auto; max-height: 400px; }
+        .controls { background: white; padding: 20px; border-radius: 10px; margin-top: 20px; }
+        .btn {
+            display: block; width: 100%; padding: 15px; margin: 10px 0;
+            border: none; border-radius: 8px; font-size: 16px;
+            cursor: pointer; transition: all 0.3s;
+        }
+        .btn-start { background: #27ae60; color: white; }
+        .btn-stop { background: #e74c3c; color: white; }
+        .btn-share { background: #3498db; color: white; }
+        .btn:disabled { background: #95a5a6; cursor: not-allowed; }
+        .btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 5px 10px rgba(0,0,0,0.2); }
+        .status {
+            padding: 15px; border-radius: 8px; text-align: center;
+            margin: 20px 0; font-weight: bold;
+        }
+        .status-active { background: #d4efdf; color: #27ae60; border: 2px solid #27ae60; }
+        .status-inactive { background: #fadbd8; color: #e74c3c; border: 2px solid #e74c3c; }
+        .url-box {
+            background: #ebf5fb; padding: 20px; border-radius: 10px;
+            margin: 20px 0; display: none;
+        }
+        .url-box input {
+            width: 100%; padding: 10px; margin: 10px 0;
+            border: 2px solid #3498db; border-radius: 5px;
+            font-size: 14px;
+        }
+        .copy-btn {
+            background: #2980b9; color: white; padding: 10px 20px;
+            border: none; border-radius: 5px; cursor: pointer;
+        }
+        .stats {
+            display: flex; justify-content: space-around;
+            background: white; padding: 15px; border-radius: 10px;
+            margin: 20px 0;
+        }
+        .stat-item { text-align: center; }
+        .stat-number { font-size: 24px; font-weight: bold; color: #2c3e50; }
+        .stat-label { color: #7f8c8d; font-size: 14px; }
+        @media (max-width: 768px) {
+            .main-content { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎓 لوحة تحكم المدرس - البث المباشر</h1>
+        
+        <div class="status status-inactive" id="status">
+            ⚫ البث غير نشط - اضغط "بدء البث" لبدء الجلسة
+        </div>
+        
+        <div class="main-content">
+            <div class="video-section">
+                <div class="video-container">
+                    <video id="localVideo" autoplay muted></video>
+                </div>
+                
+                <div class="controls">
+                    <button onclick="startBroadcast()" id="startBtn" class="btn btn-start">
+                        ▶ بدء البث المباشر
+                    </button>
+                    <button onclick="stopBroadcast()" id="stopBtn" class="btn btn-stop" disabled>
+                        ⏹ إيقاف البث
+                    </button>
+                    <button onclick="toggleScreenShare()" id="screenBtn" class="btn btn-share">
+                        🖥️ مشاركة الشاشة
+                    </button>
+                </div>
+                
+                <div class="stats">
+                    <div class="stat-item">
+                        <div class="stat-number" id="viewerCount">0</div>
+                        <div class="stat-label">👥 المشاهدين</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="duration">00:00</div>
+                        <div class="stat-label">⏱️ المدة</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="fps">0</div>
+                        <div class="stat-label">📊 FPS</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="control-section">
+                <div class="url-box" id="urlBox">
+                    <h3>🔗 رابط البث للطلاب:</h3>
+                    <input type="text" id="broadcastUrl" readonly>
+                    <button onclick="copyUrl()" class="copy-btn">📋 نسخ الرابط</button>
+                    <p style="color: #7f8c8d; margin-top: 10px; font-size: 14px;">
+                        أرسل هذا الرابط للطلاب لمشاهدة البث المباشر
+                    </p>
+                </div>
+                
+                <div style="background: #fff8e1; padding: 20px; border-radius: 10px; margin-top: 20px;">
+                    <h3 style="color: #ff9800; margin-top: 0;">🎯 التعليمات:</h3>
+                    <ol style="padding-right: 20px; color: #5d4037;">
+                        <li>اضغط "بدء البث" وسيطلب إذن الكاميرا والميكروفون</li>
+                        <li>انسخ الرابط الذي سيظهر</li>
+                        <li>أرسل الرابط للطلاب</li>
+                        <li>اضغط "مشاركة الشاشة" لعرض شاشتك</li>
+                        <li>تحدث بشكل طبيعي - الطلاب سيشاهدون</li>
+                    </ol>
+                </div>
+                
+                <div style="background: #e8f5e8; padding: 20px; border-radius: 10px; margin-top: 20px;">
+                    <h3 style="color: #4CAF50; margin-top: 0;">ℹ️ معلومات التقنية:</h3>
+                    <p><strong>الموقع:</strong> <span id="siteUrl">https://cripanyt.onrender.com</span></p>
+                    <p><strong>الحالة:</strong> <span id="connectionStatus">جاري التحقق...</span></p>
+                    <p><strong>الدعم:</strong> Chrome, Firefox, Edge (يحتاج HTTPS)</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let localStream;
+        let ws;
+        let broadcastId;
+        let isBroadcasting = false;
+        let isScreenSharing = false;
+        let viewerCount = 0;
+        let broadcastStartTime;
+        let frameCount = 0;
+        let fpsInterval;
+        
+        // عنوان الخادم
+        const SERVER_URL = window.location.origin;
+        
+        // تحديث رابط الموقع
+        document.getElementById('siteUrl').textContent = SERVER_URL;
+        
+        async function startBroadcast() {
+            try {
+                // طلب إذن الكاميرا والميكروفون
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        frameRate: { ideal: 15 }
+                    },
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        sampleRate: 44100
+                    }
+                });
+                
+                // عرض الفيديو المحلي
+                const videoElement = document.getElementById('localVideo');
+                videoElement.srcObject = localStream;
+                
+                // إنشاء معرف البث
+                broadcastId = 'class_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                
+                // الاتصال بخادم WebSocket
+                ws = new WebSocket(SERVER_URL.replace('http', 'ws'));
+                
+                ws.onopen = () => {
+                    console.log('✅ اتصل بالخادم');
+                    
+                    // تسجيل كمدرس
+                    ws.send(JSON.stringify({
+                        type: 'register_teacher',
+                        broadcastId: broadcastId,
+                        title: 'بث تعليمي مباشر'
+                    }));
+                    
+                    // بدء إرسال الفيديو
+                    startVideoStreaming();
+                    
+                    // بدء إرسال الصوت
+                    startAudioStreaming();
+                    
+                    // تحديث الحالة
+                    isBroadcasting = true;
+                    broadcastStartTime = Date.now();
+                    updateDuration();
+                    
+                    document.getElementById('startBtn').disabled = true;
+                    document.getElementById('stopBtn').disabled = false;
+                    document.getElementById('status').className = 'status status-active';
+                    document.getElementById('status').innerHTML = '🟢 البث نشط - جاري الإرسال';
+                    
+                    document.getElementById('connectionStatus').textContent = '🟢 متصل بالخادم';
+                    
+                    console.log('🎬 البث بدأ:', broadcastId);
+                };
+                
+                ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.type === 'teacher_registered') {
+                        // عرض رابط البث
+                        const urlInput = document.getElementById('broadcastUrl');
+                        urlInput.value = data.url;
+                        document.getElementById('urlBox').style.display = 'block';
+                        
+                        // نسخ الرابط تلقائياً
+                        copyUrl();
+                        
+                    } else if (data.type === 'chat_message') {
+                        // عرض رسائل الدردشة (يمكن إضافتها لاحقاً)
+                        console.log('💬 دردشة:', data.message);
+                    }
+                };
+                
+                ws.onerror = (error) => {
+                    console.error('❌ خطأ في WebSocket:', error);
+                    document.getElementById('connectionStatus').textContent = '🔴 خطأ في الاتصال';
+                    alert('❌ خطأ في الاتصال بالخادم. تأكد من اتصال الإنترنت.');
+                };
+                
+                ws.onclose = () => {
+                    console.log('🔌 تم إغلاق الاتصال');
+                    if (isBroadcasting) {
+                        alert('⚠️ انقطع الاتصال بالخادم. سيتم إعادة المحاولة...');
+                        setTimeout(() => location.reload(), 2000);
+                    }
+                };
+                
+            } catch (error) {
+                console.error('❌ خطأ في بدء البث:', error);
+                alert('❌ خطأ: ' + error.message + 
+                    '\n\nتأكد من:\n1. منح إذن الكاميرا والميكروفون\n2. استخدام HTTPS\n3. اتصال إنترنت جيد');
+            }
+        }
+        
+        function startVideoStreaming() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const video = document.getElementById('localVideo');
+            
+            canvas.width = 640;
+            canvas.height = 360;
+            
+            let lastFrameTime = Date.now();
+            
+            function captureFrame() {
+                if (!isBroadcasting) return;
+                
+                const now = Date.now();
+                const elapsed = now - lastFrameTime;
+                
+                if (elapsed >= 100) { // 10 فريمات في الثانية
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    canvas.toBlob((blob) => {
+                        if (!blob) return;
+                        
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                            // إرسال الفريم للخادم
+                            fetch(SERVER_URL + '/api/stream', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    frame: reader.result,
+                                    broadcastId: broadcastId
+                                })
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    document.getElementById('viewerCount').textContent = data.viewers;
+                                    viewerCount = data.viewers;
+                                }
+                            })
+                            .catch(error => console.error('❌ خطأ في إرسال الفريم:', error));
+                        };
+                        reader.readAsDataURL(blob);
+                    }, 'image/jpeg', 0.7);
+                    
+                    frameCount++;
+                    lastFrameTime = now;
+                }
+                
+                requestAnimationFrame(captureFrame);
+            }
+            
+            // بدء حساب FPS
+            if (fpsInterval) clearInterval(fpsInterval);
+            fpsInterval = setInterval(() => {
+                document.getElementById('fps').textContent = frameCount;
+                frameCount = 0;
+            }, 1000);
+            
+            captureFrame();
+        }
+        
+        function startAudioStreaming() {
+            if (!localStream.getAudioTracks().length) return;
+            
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioContext.createMediaStreamSource(localStream);
+            const processor = audioContext.createScriptProcessor(1024, 1, 1);
+            
+            source.connect(processor);
+            processor.connect(audioContext.destination);
+            
+            processor.onaudioprocess = (e) => {
+                if (!isBroadcasting || !ws || ws.readyState !== WebSocket.OPEN) return;
+                
+                const inputData = e.inputBuffer.getChannelData(0);
+                const buffer = new Float32Array(inputData.length);
+                
+                for (let i = 0; i < inputData.length; i++) {
+                    buffer[i] = inputData[i];
+                }
+                
+                // إرسال جزء الصوت
+                ws.send(JSON.stringify({
+                    type: 'audio_chunk',
+                    chunk: Array.from(buffer),
+                    broadcastId: broadcastId
+                }));
+            };
+        }
+        
+        async function toggleScreenShare() {
+            try {
+                if (isScreenSharing) {
+                    // العودة للكاميرا
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: true,
+                        audio: true
+                    });
+                    
+                    localStream.getTracks().forEach(track => track.stop());
+                    localStream = stream;
+                    document.getElementById('localVideo').srcObject = localStream;
+                    isScreenSharing = false;
+                    document.getElementById('screenBtn').textContent = '🖥️ مشاركة الشاشة';
+                    
+                } else {
+                    // مشاركة الشاشة
+                    const stream = await navigator.mediaDevices.getDisplayMedia({
+                        video: { frameRate: 15 },
+                        audio: true
+                    });
+                    
+                    localStream.getTracks().forEach(track => track.stop());
+                    localStream = stream;
+                    document.getElementById('localVideo').srcObject = localStream;
+                    isScreenSharing = true;
+                    document.getElementById('screenBtn').textContent = '📷 العودة للكاميرا';
+                    
+                    // إعداد المنع عند إيقاف مشاركة الشاشة
+                    stream.getVideoTracks()[0].onended = () => {
+                        if (isScreenSharing) {
+                            toggleScreenShare();
+                        }
+                    };
+                }
+            } catch (error) {
+                console.error('❌ خطأ في مشاركة الشاشة:', error);
+                if (error.name !== 'NotAllowedError') {
+                    alert('❌ خطأ: ' + error.message);
+                }
+            }
+        }
+        
+        function stopBroadcast() {
+            isBroadcasting = false;
+            
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close();
+            }
+            
+            if (fpsInterval) {
+                clearInterval(fpsInterval);
+            }
+            
+            document.getElementById('status').className = 'status status-inactive';
+            document.getElementById('status').innerHTML = '⚫ البث متوقف';
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('localVideo').srcObject = null;
+            document.getElementById('urlBox').style.display = 'none';
+            document.getElementById('viewerCount').textContent = '0';
+            document.getElementById('fps').textContent = '0';
+            document.getElementById('duration').textContent = '00:00';
+            
+            console.log('⏹️ البث توقف');
+        }
+        
+        function copyUrl() {
+            const urlInput = document.getElementById('broadcastUrl');
+            urlInput.select();
+            urlInput.setSelectionRange(0, 99999);
+            
+            navigator.clipboard.writeText(urlInput.value).then(() => {
+                alert('✅ تم نسخ رابط البث!\n\nالرابط: ' + urlInput.value + '\n\nأرسله الآن للطلاب.');
+            }).catch(err => {
+                console.error('❌ خطأ في النسخ:', err);
+            });
+        }
+        
+        function updateDuration() {
+            if (!broadcastStartTime) return;
+            
+            setInterval(() => {
+                if (isBroadcasting) {
+                    const now = Date.now();
+                    const diff = Math.floor((now - broadcastStartTime) / 1000);
+                    const minutes = Math.floor(diff / 60);
+                    const seconds = diff % 60;
+                    
+                    document.getElementById('duration').textContent = 
+                        `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                }
+            }, 1000);
+        }
+        
+        // اختبار الاتصال بالخادم
+        async function checkServerConnection() {
+            try {
+                const response = await fetch(SERVER_URL + '/health');
+                const data = await response.json();
+                document.getElementById('connectionStatus').textContent = '🟢 الخادم يعمل';
+                console.log('✅ حالة الخادم:', data);
+            } catch (error) {
+                document.getElementById('connectionStatus').textContent = '🔴 لا يمكن الاتصال';
+                console.error('❌ لا يمكن الاتصال بالخادم:', error);
+            }
+        }
+        
+        // تشغيل عند تحميل الصفحة
+        window.onload = () => {
+            checkServerConnection();
+            
+            // إغلاق البث عند مغادرة الصفحة
+            window.addEventListener('beforeunload', (event) => {
+                if (isBroadcasting) {
+                    event.preventDefault();
+                    event.returnValue = 'هل تريد إنهاء البث والخروج؟';
+                    stopBroadcast();
+                }
+            });
+        };
+    </script>
+</body>
+  </html>
