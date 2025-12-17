@@ -1,1 +1,226 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مشاهدة البث المباشر</title>
+    <style>
+        * { box-sizing: border-box; font-family: Arial, sans-serif; }
+        body { margin: 0; padding: 10px; background: #000; color: white; }
+        .header {
+            text-align: center; padding: 10px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px; margin-bottom: 10px;
+        }
+        .live-badge {
+            background: #ff0000; color: white; padding: 5px 15px;
+            border-radius: 20px; display: inline-block;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; }
+        }
+        .video-container {
+            width: 100%; max-width: 1200px; margin: auto;
+            background: #000; border-radius: 10px; overflow: hidden;
+            position: relative;
+        }
+        canvas { width: 100%; max-height: 70vh; background: #000; }
+        .loading {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); text-align: center;
+            color: white; background: rgba(0,0,0,0.7);
+            padding: 20px; border-radius: 10px;
+        }
+        .controls { text-align: center; margin: 15px 0; }
+        button {
+            background: #1a73e8; color: white; border: none;
+            padding: 10px 20px; border-radius: 5px; margin: 5px; cursor: pointer;
+        }
+        .status {
+            text-align: center; padding: 10px; margin: 10px 0;
+            border-radius: 5px; background: rgba(255,255,255,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="live-badge">● مباشر</div>
+        <h2>📚 البث التعليمي المباشر</h2>
+        <div class="status" id="status">🔴 جاري الاتصال...</div>
+    </div>
+    
+    <div class="video-container">
+        <div class="loading" id="loading">
+            <div style="font-size: 24px; margin-bottom: 10px;">⏳</div>
+            <p>جاري الاتصال بالبث المباشر...</p>
+        </div>
+        <canvas id="videoCanvas"></canvas>
+    </div>
+    
+    <div class="controls">
+        <button onclick="toggleFullscreen()">📺 ملء الشاشة</button>
+        <button onclick="toggleAudio()" id="audioBtn">🔊 الصوت</button>
+        <button onclick="reconnect()">🔄 إعادة الاتصال</button>
+    </div>
+    
+    <div style="text-align: center; margin-top: 20px; color: #888; font-size: 12px;">
+        <p>🔊 تأكد من تشغيل الصوت</p>
+        <p>لأي مشكلة: أعد تحميل الصفحة أو اطلب الرابط الجديد</p>
+    </div>
 
+    <script>
+        let ws;
+        let canvas, ctx;
+        let audioContext;
+        let audioQueue = [];
+        let isConnected = false;
+        
+        // الحصول على معرف الغرفة
+        function getRoomId() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('room');
+        }
+        
+        // الاتصال بالبث
+        function connectToBroadcast() {
+            const roomId = getRoomId();
+            
+            if (!roomId) {
+                document.getElementById('status').textContent = '❌ رابط غير صالح';
+                return;
+            }
+            
+            // إعداد Canvas
+            canvas = document.getElementById('videoCanvas');
+            ctx = canvas.getContext('2d');
+            canvas.width = 640;
+            canvas.height = 480;
+            
+            // الاتصال بخادم WebSocket
+            const serverUrl = window.location.origin.replace('http', 'ws');
+            ws = new WebSocket(serverUrl);
+            
+            ws.onopen = () => {
+                console.log('✅ اتصل بالخادم');
+                ws.send(JSON.stringify({
+                    type: 'register_viewer',
+                    roomId: roomId
+                }));
+                
+                document.getElementById('status').textContent = '🟡 في انتظار البث...';
+                
+                // بدء تشغيل الصوت
+                initAudio();
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'broadcast_info') {
+                    if (data.status === 'active') {
+                        document.getElementById('status').textContent = '🟢 متصل - جاري البث';
+                        document.getElementById('loading').style.display = 'none';
+                        isConnected = true;
+                    }
+                    
+                } else if (data.type === 'video_frame') {
+                    // عرض الفريم
+                    displayVideoFrame(data.frame);
+                    
+                } else if (data.type === 'audio_data') {
+                    // تشغيل الصوت
+                    playAudio(data.data);
+                    
+                } else if (data.type === 'broadcast_ended') {
+                    document.getElementById('status').textContent = '⏹️ انتهى البث';
+                    document.getElementById('loading').style.display = 'block';
+                    document.getElementById('loading').innerHTML = `
+                        <div style="font-size: 24px; margin-bottom: 10px;">🏁</div>
+                        <p>انتهى البث المباشر</p>
+                    `;
+                    isConnected = false;
+                }
+            };
+            
+            ws.onerror = (error) => {
+                console.error('❌ خطأ في الاتصال:', error);
+                document.getElementById('status').textContent = '🔴 خطأ في الاتصال';
+                setTimeout(connectToBroadcast, 3000);
+            };
+            
+            ws.onclose = () => {
+                if (isConnected) {
+                    document.getElementById('status').textContent = '🔴 انقطع الاتصال - جاري إعادة المحاولة...';
+                    setTimeout(connectToBroadcast, 2000);
+                }
+            };
+        }
+        
+        function displayVideoFrame(frameData) {
+            const img = new Image();
+            img.onload = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            };
+            img.src = frameData;
+        }
+        
+        function initAudio() {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            } catch (error) {
+                console.error('❌ لا يدعم الصوت:', error);
+            }
+        }
+        
+        function playAudio(audioData) {
+            if (!audioContext) return;
+            
+            try {
+                const buffer = new Float32Array(audioData);
+                const audioBuffer = audioContext.createBuffer(1, buffer.length, 24000);
+                audioBuffer.copyToChannel(buffer, 0);
+                
+                const source = audioContext.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(audioContext.destination);
+                source.start();
+            } catch (error) {
+                console.error('❌ خطأ في تشغيل الصوت:', error);
+            }
+        }
+        
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                canvas.requestFullscreen().catch(err => {
+                    console.error(`خطأ في ملء الشاشة: ${err.message}`);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        }
+        
+        function toggleAudio() {
+            const btn = document.getElementById('audioBtn');
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+                btn.textContent = '🔊 الصوت';
+            } else {
+                audioContext.suspend();
+                btn.textContent = '🔇 كتم';
+            }
+        }
+        
+        function reconnect() {
+            if (ws) ws.close();
+            document.getElementById('status').textContent = '🔄 جاري إعادة الاتصال...';
+            document.getElementById('loading').style.display = 'block';
+            setTimeout(connectToBroadcast, 500);
+        }
+        
+        // بدء الاتصال عند تحميل الصفحة
+        window.onload = connectToBroadcast;
+    </script>
+</body>
+</html>
