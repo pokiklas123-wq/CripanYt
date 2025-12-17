@@ -1,7 +1,7 @@
 {
-  "name": "live-broadcast",
+  "name": "live-broadcast-render",
   "version": "1.0.0",
-  "description": "بث مباشر من الصفحة",
+  "description": "منصة البث المباشر على render.com",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -9,5 +9,8 @@
   "dependencies": {
     "express": "^4.18.2",
     "ws": "^8.14.2"
+  },
+  "engines": {
+    "node": ">=14.0.0"
   }
 }
