@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>مشاهدة البث المباشر</title>
+    <title>مشاهدة البث المباشر (نظام جديد)</title>
     <style>
         * { box-sizing: border-box; font-family: Arial, sans-serif; }
         body { margin: 0; padding: 10px; background: #000; color: white; }
@@ -45,12 +45,17 @@
         .connected { background: rgba(76,175,80,0.2); border: 2px solid #4CAF50; }
         .disconnected { background: rgba(244,67,54,0.2); border: 2px solid #F44336; }
         .waiting { background: rgba(255,193,7,0.2); border: 2px solid #FFC107; }
+        .info-box {
+            background: rgba(255,255,255,0.05);
+            padding: 10px; border-radius: 5px;
+            margin: 10px 0; text-align: center;
+        }
     </style>
 </head>
 <body>
     <div class="header">
         <div class="live-badge">● مباشر</div>
-        <h2>📚 البث التعليمي المباشر</h2>
+        <h2>📚 البث التعليمي المباشر (نظام جديد)</h2>
         <div class="status disconnected" id="status">🔴 جاري الاتصال...</div>
     </div>
     
@@ -58,64 +63,60 @@
         <div class="loading" id="loading">
             <div style="font-size: 24px; margin-bottom: 10px;">⏳</div>
             <p id="loadingText">جاري الاتصال بالبث المباشر...</p>
-            <button onclick="reconnect()" style="margin-top: 10px; background: #1a73e8;">🔄 محاولة الاتصال</button>
+            <p style="font-size: 12px; color: #aaa; margin-top: 10px;" id="connectionInfo">
+                جاري البحث عن البث...
+            </p>
+            <button onclick="connectToBroadcast()" style="margin-top: 15px; background: #1a73e8;">
+                🔄 محاولة الاتصال
+            </button>
         </div>
         <canvas id="videoCanvas"></canvas>
     </div>
     
+    <div class="info-box" id="broadcastInfo" style="display: none;">
+        <p>👨‍🏫 المدرس: <span id="teacherStatus">نشط</span></p>
+        <p>🔄 آخر تحديث: <span id="lastUpdate">الآن</span></p>
+        <p>📊 جودة البث: <span id="quality">جيدة</span></p>
+    </div>
+    
     <div class="controls">
         <button onclick="toggleFullscreen()">📺 ملء الشاشة</button>
-        <button onclick="toggleAudio()" id="audioBtn">🔊 الصوت</button>
-        <button onclick="reconnect()">🔄 إعادة الاتصال</button>
-        <button onclick="checkServer()" id="checkBtn">🔍 فحص السيرفر</button>
+        <button onclick="toggleAutoRefresh()" id="autoRefreshBtn">🔄 التحديث التلقائي: تشغيل</button>
+        <button onclick="checkBroadcastStatus()" id="checkBtn">🔍 فحص حالة البث</button>
     </div>
     
     <div style="text-align: center; margin-top: 20px; color: #888; font-size: 12px;">
-        <p>🔊 تأكد من تشغيل الصوت</p>
-        <p>إذا لم يعمل البث: تأكد من أن المدرس بدأ البث أولاً</p>
+        <p>🔊 تأكد من تشغيل الصوت | 📱 يدعم جميع الأجهزة</p>
+        <p>💡 <strong>معلومة:</strong> النظام الجديد يعمل بدون WebSocket - أكثر استقراراً</p>
     </div>
 
     <script>
-        let ws;
         let canvas, ctx;
-        let audioContext;
-        let isConnected = false;
+        let broadcastInterval;
+        let autoRefresh = true;
+        let lastFrameTime = 0;
         let connectionAttempts = 0;
-        const MAX_ATTEMPTS = 10;
+        let roomId;
         
         // الحصول على معرف الغرفة
         function getRoomId() {
             const urlParams = new URLSearchParams(window.location.search);
-            const roomId = urlParams.get('room');
+            const id = urlParams.get('room');
             
-            if (!roomId) {
-                showError('❌ رابط غير صالح. لا يوجد معرف غرفة.');
+            if (!id) {
+                showError('❌ رابط غير صالح. لا يوجد معرف بث.');
                 return null;
             }
             
-            return roomId;
-        }
-        
-        // إصلاح: الاتصال الصحيح بـ WebSocket
-        function getWebSocketURL() {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const hostname = window.location.hostname;
-            const port = window.location.port ? `:${window.location.port}` : '';
-            
-            // إذا كنت تستخدم Render، قد تحتاج إلى منفذ مختلف
-            return `${protocol}//${hostname}${port}`;
+            return id;
         }
         
         // الاتصال بالبث
         function connectToBroadcast() {
-            const roomId = getRoomId();
+            roomId = getRoomId();
             if (!roomId) return;
             
             connectionAttempts++;
-            if (connectionAttempts > MAX_ATTEMPTS) {
-                showError('❌ فشل الاتصال بعد عدة محاولات. تأكد من أن المدرس بدأ البث.');
-                return;
-            }
             
             // إعداد Canvas
             canvas = document.getElementById('videoCanvas');
@@ -123,94 +124,110 @@
             canvas.width = 640;
             canvas.height = 480;
             
-            // الاتصال بخادم WebSocket
-            const wsUrl = getWebSocketURL();
-            console.log('جاري الاتصال بـ:', wsUrl);
+            // تحديث حالة الاتصال
+            updateStatus('🟡 جاري البحث عن البث...', 'waiting');
+            document.getElementById('loadingText').textContent = 'جاري البحث عن البث...';
+            document.getElementById('connectionInfo').textContent = `المحاولة: ${connectionAttempts}`;
             
-            try {
-                ws = new WebSocket(wsUrl);
-                
-                ws.onopen = () => {
-                    console.log('✅ اتصل بالخادم');
-                    updateStatus('🟡 متصل بالسيرفر - في انتظار البث...', 'waiting');
-                    
-                    ws.send(JSON.stringify({
-                        type: 'register_viewer',
-                        roomId: roomId,
-                        timestamp: Date.now()
-                    }));
-                    
-                    // إخفاء زر المحاولة أثناء الاتصال
-                    document.getElementById('loadingText').textContent = 'في انتظار بدء البث من المدرس...';
-                    
-                    // بدء تشغيل الصوت
-                    initAudio();
-                };
-                
-                ws.onmessage = (event) => {
-                    try {
-                        const data = JSON.parse(event.data);
-                        console.log('📨 رسالة من السيرفر:', data.type);
-                        
-                        if (data.type === 'broadcast_info') {
-                            if (data.status === 'active') {
-                                updateStatus('🟢 متصل - جاري البث', 'connected');
-                                document.getElementById('loading').style.display = 'none';
-                                isConnected = true;
-                                connectionAttempts = 0; // إعادة تعيين المحاولات
-                            } else {
-                                updateStatus('🟡 في انتظار بدء البث من المدرس...', 'waiting');
-                            }
-                            
-                        } else if (data.type === 'video_frame') {
-                            // عرض الفريم
-                            displayVideoFrame(data.frame);
-                            
-                        } else if (data.type === 'audio_data') {
-                            // تشغيل الصوت
-                            playAudio(data.data);
-                            
-                        } else if (data.type === 'broadcast_ended') {
-                            showBroadcastEnded();
-                        }
-                    } catch (error) {
-                        console.error('❌ خطأ في معالجة الرسالة:', error);
-                    }
-                };
-                
-                ws.onerror = (error) => {
-                    console.error('❌ خطأ في الاتصال:', error);
-                    
-                    if (connectionAttempts <= 3) {
-                        updateStatus('🔴 خطأ في الاتصال - جاري إعادة المحاولة...', 'disconnected');
-                        setTimeout(() => {
-                            if (!isConnected) connectToBroadcast();
-                        }, 2000);
-                    } else {
-                        showError('❌ فشل الاتصال بالسيرفر. تأكد من:<br>1. السيرفر يعمل<br>2. المدرس بدأ البث<br>3. الرابط صحيح');
-                    }
-                };
-                
-                ws.onclose = (event) => {
-                    console.log('🔌 انقطع الاتصال:', event.code, event.reason);
-                    
-                    if (isConnected) {
-                        updateStatus('🔴 انقطع الاتصال - جاري إعادة المحاولة...', 'disconnected');
-                        document.getElementById('loading').style.display = 'block';
-                        
-                        setTimeout(() => {
-                            if (!isConnected) connectToBroadcast();
-                        }, 3000);
-                    }
-                };
-                
-            } catch (error) {
-                console.error('❌ خطأ في إنشاء WebSocket:', error);
-                showError('❌ المتصفح لا يدعم WebSocket أو هناك خطأ في الاتصال.');
+            // طلب أولي للتحقق من وجود البث
+            checkBroadcastStatus();
+            
+            // بدء التحديث الدوري إذا كان البث نشطاً
+            if (autoRefresh) {
+                startBroadcastPolling();
             }
         }
         
+        // التحقق من حالة البث
+        function checkBroadcastStatus() {
+            if (!roomId) return;
+            
+            fetch(`/student/stream?roomId=${roomId}&t=${Date.now()}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('📡 استجابة السيرفر:', data.status);
+                    
+                    if (data.status === 'active' && data.frame) {
+                        // البث نشط وهناك إطار
+                        updateStatus('🟢 متصل - جاري البث', 'connected');
+                        document.getElementById('loading').style.display = 'none';
+                        document.getElementById('broadcastInfo').style.display = 'block';
+                        
+                        // عرض الإطار
+                        displayVideoFrame(data.frame);
+                        
+                        // تحديث المعلومات
+                        updateBroadcastInfo(data);
+                        
+                        // إعادة تعيين محاولات الاتصال
+                        connectionAttempts = 0;
+                        
+                    } else if (data.status === 'waiting') {
+                        // في انتظار بدء البث
+                        updateStatus('🟡 في انتظار بدء البث من المدرس...', 'waiting');
+                        document.getElementById('loading').style.display = 'block';
+                        document.getElementById('loadingText').textContent = 'في انتظار أن يبدأ المدرس البث...';
+                        document.getElementById('connectionInfo').textContent = 
+                            'تأكد من أن المدرس بدأ البث وأن الرابط صحيح';
+                        
+                        // إعادة المحاولة بعد 3 ثواني
+                        if (connectionAttempts < 10) {
+                            setTimeout(checkBroadcastStatus, 3000);
+                        }
+                        
+                    } else if (data.status === 'ended') {
+                        // البث انتهى
+                        showBroadcastEnded();
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ خطأ في الاتصال:', error);
+                    
+                    if (connectionAttempts < 5) {
+                        updateStatus('🔴 خطأ في الاتصال - جاري إعادة المحاولة...', 'disconnected');
+                        setTimeout(checkBroadcastStatus, 2000);
+                    } else {
+                        showError('❌ فشل الاتصال بعد عدة محاولات. تأكد من:<br>' +
+                                 '1. اتصال الإنترنت<br>' +
+                                 '2. الرابط صحيح<br>' +
+                                 '3. المدرس بدأ البث');
+                    }
+                });
+        }
+        
+        // بدء الاستعلام الدوري عن البث
+        function startBroadcastPolling() {
+            if (broadcastInterval) {
+                clearInterval(broadcastInterval);
+            }
+            
+            broadcastInterval = setInterval(() => {
+                if (!roomId) return;
+                
+                fetch(`/student/stream?roomId=${roomId}&t=${Date.now()}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'active' && data.frame) {
+                            // تحديث الإطار
+                            displayVideoFrame(data.frame);
+                            updateBroadcastInfo(data);
+                            lastFrameTime = Date.now();
+                        } else if (data.status === 'ended') {
+                            showBroadcastEnded();
+                            clearInterval(broadcastInterval);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('❌ خطأ في التحديث:', error);
+                    });
+                    
+            }, 1000); // تحديث كل ثانية
+        }
+        
+        // عرض إطار الفيديو
         function displayVideoFrame(frameData) {
+            if (!frameData) return;
+            
             try {
                 const img = new Image();
                 img.onload = () => {
@@ -218,7 +235,7 @@
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                 };
                 img.onerror = () => {
-                    console.error('❌ خطأ في تحميل الصورة');
+                    console.warn('⚠️ خطأ في تحميل صورة البث');
                 };
                 img.src = frameData;
             } catch (error) {
@@ -226,46 +243,46 @@
             }
         }
         
-        function initAudio() {
-            try {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                console.log('✅ AudioContext جاهز');
-            } catch (error) {
-                console.error('❌ لا يدعم الصوت:', error);
-            }
-        }
-        
-        function playAudio(audioData) {
-            if (!audioContext || !audioData || audioData.length === 0) return;
+        // تحديث معلومات البث
+        function updateBroadcastInfo(data) {
+            const now = Date.now();
+            const lastUpdate = data.timestamp;
+            const diff = now - lastUpdate;
             
-            try {
-                // إصلاح: استخدام معدل عينات مناسب
-                const sampleRate = 44100; // معدل عينات أعلى
-                const buffer = new Float32Array(audioData);
-                const audioBuffer = audioContext.createBuffer(1, buffer.length, sampleRate);
-                audioBuffer.copyToChannel(buffer, 0);
-                
-                const source = audioContext.createBufferSource();
-                source.buffer = audioBuffer;
-                source.connect(audioContext.destination);
-                source.start();
-            } catch (error) {
-                console.error('❌ خطأ في تشغيل الصوت:', error);
+            // تحديث وقت آخر تحديث
+            let timeText = 'الآن';
+            if (diff > 1000) {
+                const seconds = Math.floor(diff / 1000);
+                timeText = `قبل ${seconds} ثانية`;
             }
+            
+            document.getElementById('lastUpdate').textContent = timeText;
+            
+            // تحديث حالة المدرس
+            const teacherStatus = diff < 5000 ? 'نشط' : (diff < 10000 ? 'بطيء' : 'غير متصل');
+            document.getElementById('teacherStatus').textContent = teacherStatus;
+            
+            // تحديث جودة البث
+            const frameCount = data.frameCount || 0;
+            const quality = frameCount > 5 ? 'ممتازة' : (frameCount > 2 ? 'جيدة' : 'ضعيفة');
+            document.getElementById('quality').textContent = quality;
         }
         
+        // تحديث حالة الاتصال
         function updateStatus(message, className) {
             const statusElement = document.getElementById('status');
             statusElement.textContent = message;
             statusElement.className = 'status ' + className;
         }
         
+        // عرض خطأ
         function showError(message) {
             updateStatus(message, 'disconnected');
-            document.getElementById('loadingText').innerHTML = message + '<br><br>جاري إعادة المحاولة...';
+            document.getElementById('loadingText').innerHTML = message;
             document.getElementById('loading').style.display = 'block';
         }
         
+        // عرض نهاية البث
         function showBroadcastEnded() {
             updateStatus('⏹️ انتهى البث المباشر', 'disconnected');
             document.getElementById('loading').style.display = 'block';
@@ -274,13 +291,14 @@
                 <p>انتهى البث المباشر</p>
                 <p>اتصل بالمدرس لبدء بث جديد</p>
             `;
-            isConnected = false;
+            document.getElementById('broadcastInfo').style.display = 'none';
             
-            if (ws) {
-                ws.close();
+            if (broadcastInterval) {
+                clearInterval(broadcastInterval);
             }
         }
         
+        // تبديل وضع ملء الشاشة
         function toggleFullscreen() {
             const container = document.querySelector('.video-container');
             
@@ -293,81 +311,27 @@
             }
         }
         
-        function toggleAudio() {
-            const btn = document.getElementById('audioBtn');
-            if (audioContext) {
-                if (audioContext.state === 'suspended') {
-                    audioContext.resume();
-                    btn.textContent = '🔊 الصوت';
-                } else {
-                    audioContext.suspend();
-                    btn.textContent = '🔇 كتم';
+        // تبديل التحديث التلقائي
+        function toggleAutoRefresh() {
+            const btn = document.getElementById('autoRefreshBtn');
+            autoRefresh = !autoRefresh;
+            
+            if (autoRefresh) {
+                btn.textContent = '🔄 التحديث التلقائي: تشغيل';
+                startBroadcastPolling();
+            } else {
+                btn.textContent = '🔄 التحديث التلقائي: إيقاف';
+                if (broadcastInterval) {
+                    clearInterval(broadcastInterval);
                 }
             }
-        }
-        
-        function reconnect() {
-            connectionAttempts = 0;
-            
-            if (ws) {
-                ws.close();
-            }
-            
-            updateStatus('🔄 جاري إعادة الاتصال...', 'waiting');
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('loadingText').textContent = 'جاري إعادة الاتصال بالبث...';
-            
-            setTimeout(connectToBroadcast, 500);
-        }
-        
-        function checkServer() {
-            const checkBtn = document.getElementById('checkBtn');
-            checkBtn.textContent = '🔍 جاري الفحص...';
-            checkBtn.disabled = true;
-            
-            // التحقق من أن السيرفر يعمل
-            fetch(window.location.origin)
-                .then(response => {
-                    if (response.ok) {
-                        updateStatus('✅ السيرفر يعمل بشكل طبيعي', 'connected');
-                        alert('✅ السيرفر يعمل! الآن تأكد من أن المدرس بدأ البث.');
-                    } else {
-                        updateStatus('❌ السيرفر لا يستجيب', 'disconnected');
-                        alert('❌ السيرفر لا يستجيب. تأكد من أنه يعمل.');
-                    }
-                })
-                .catch(error => {
-                    updateStatus('❌ لا يمكن الوصول للسيرفر', 'disconnected');
-                    alert('❌ لا يمكن الوصول للسيرفر. تأكد من اتصال الإنترنت.');
-                })
-                .finally(() => {
-                    setTimeout(() => {
-                        checkBtn.textContent = '🔍 فحص السيرفر';
-                        checkBtn.disabled = false;
-                    }, 2000);
-                });
         }
         
         // بدء الاتصال عند تحميل الصفحة
         window.onload = function() {
-            console.log('🚀 صفحة المشاهدة جاهزة');
+            console.log('🚀 صفحة المشاهدة جاهزة (نظام جديد)');
             connectToBroadcast();
-            
-            // تحقق تلقائي كل 30 ثانية
-            setInterval(() => {
-                if (!isConnected && connectionAttempts < MAX_ATTEMPTS) {
-                    console.log('🔄 تحقق تلقائي من الاتصال...');
-                    reconnect();
-                }
-            }, 30000);
         };
-        
-        // إغلاق الاتصال عند مغادرة الصفحة
-        window.addEventListener('beforeunload', () => {
-            if (ws) {
-                ws.close();
-            }
-        });
     </script>
 </body>
-    </html>
+</html>
