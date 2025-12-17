@@ -3,102 +3,137 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>مشاهدة البث المباشر (نظام جديد)</title>
+    <title>مشاهدة البث المباشر</title>
     <style>
-        * { box-sizing: border-box; font-family: Arial, sans-serif; }
-        body { margin: 0; padding: 10px; background: #000; color: white; }
-        .header {
-            text-align: center; padding: 10px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px; margin-bottom: 10px;
-        }
-        .live-badge {
-            background: #ff0000; color: white; padding: 5px 15px;
-            border-radius: 20px; display: inline-block;
-            animation: pulse 1.5s infinite;
-        }
-        @keyframes pulse {
-            0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; }
-        }
-        .video-container {
-            width: 100%; max-width: 1200px; margin: auto;
-            background: #000; border-radius: 10px; overflow: hidden;
-            position: relative;
-        }
-        canvas { width: 100%; max-height: 70vh; background: #000; }
-        .loading {
-            position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%); text-align: center;
-            color: white; background: rgba(0,0,0,0.7);
-            padding: 20px; border-radius: 10px;
-            z-index: 10;
-        }
-        .controls { text-align: center; margin: 15px 0; }
-        button {
-            background: #1a73e8; color: white; border: none;
-            padding: 10px 20px; border-radius: 5px; margin: 5px; cursor: pointer;
-        }
-        .status {
-            text-align: center; padding: 10px; margin: 10px 0;
-            border-radius: 5px; background: rgba(255,255,255,0.1);
-        }
-        .connected { background: rgba(76,175,80,0.2); border: 2px solid #4CAF50; }
-        .disconnected { background: rgba(244,67,54,0.2); border: 2px solid #F44336; }
-        .waiting { background: rgba(255,193,7,0.2); border: 2px solid #FFC107; }
-        .info-box {
-            background: rgba(255,255,255,0.05);
-            padding: 10px; border-radius: 5px;
-            margin: 10px 0; text-align: center;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); min-height: 100vh; color: white; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; padding: 30px; background: rgba(255,255,255,0.1); border-radius: 20px; margin-bottom: 30px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); }
+        h1 { color: #FFD700; font-size: 2.8rem; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+        .subtitle { color: #aaa; font-size: 1.2rem; margin-bottom: 20px; }
+        .live-indicator { background: linear-gradient(45deg, #ff0000, #ff6b6b); color: white; padding: 12px 30px; border-radius: 30px; font-size: 1.3rem; font-weight: bold; display: inline-block; animation: pulse 1.5s infinite; box-shadow: 0 0 20px rgba(255,0,0,0.5); letter-spacing: 1px; }
+        @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 20px rgba(255,0,0,0.5); } 50% { transform: scale(1.05); box-shadow: 0 0 30px rgba(255,0,0,0.7); } 100% { transform: scale(1); box-shadow: 0 0 20px rgba(255,0,0,0.5); } }
+        .video-container { position: relative; width: 100%; background: #000; border-radius: 20px; overflow: hidden; margin: 30px 0; box-shadow: 0 20px 50px rgba(0,0,0,0.5); border: 3px solid rgba(255,255,255,0.1); }
+        video { width: 100%; height: auto; min-height: 600px; display: block; }
+        .overlay { position: absolute; top: 30px; left: 30px; background: rgba(0,0,0,0.8); padding: 15px 25px; border-radius: 15px; display: flex; align-items: center; gap: 15px; backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.2); }
+        .status-dot { width: 15px; height: 15px; background: #ff0000; border-radius: 50%; animation: statusPulse 2s infinite; }
+        @keyframes statusPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; background: rgba(0,0,0,0.85); padding: 50px; border-radius: 20px; width: 80%; max-width: 500px; backdrop-filter: blur(10px); border: 2px solid rgba(255,255,255,0.1); z-index: 10; }
+        .loading-spinner { width: 60px; height: 60px; border: 5px solid rgba(255,255,255,0.1); border-top: 5px solid #1a73e8; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 25px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .controls { display: flex; justify-content: center; gap: 20px; margin: 30px 0; flex-wrap: wrap; }
+        button { background: linear-gradient(45deg, #1a73e8, #0d47a1); color: white; border: none; padding: 18px 35px; border-radius: 50px; font-size: 1.2rem; cursor: pointer; transition: all 0.3s; box-shadow: 0 10px 25px rgba(26,115,232,0.3); display: flex; align-items: center; gap: 12px; font-weight: bold; }
+        button:hover { transform: translateY(-3px); box-shadow: 0 15px 30px rgba(26,115,232,0.4); }
+        button:active { transform: translateY(1px); }
+        .audio-btn { background: linear-gradient(45deg, #34a853, #2d9450); }
+        .refresh-btn { background: linear-gradient(45deg, #FF9800, #F57C00); }
+        .info-panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 25px; margin: 40px 0; }
+        .info-card { background: rgba(255,255,255,0.1); padding: 25px; border-radius: 15px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); }
+        .info-card h3 { color: #FFD700; margin-bottom: 15px; font-size: 1.4rem; }
+        .info-value { font-size: 2.2rem; font-weight: bold; color: white; margin: 10px 0; }
+        .connection-status { padding: 25px; border-radius: 15px; margin: 25px 0; text-align: center; font-size: 1.3rem; font-weight: bold; background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); }
+        .connected { background: linear-gradient(45deg, rgba(76,175,80,0.3), rgba(46,125,50,0.3)); border-color: #4CAF50; }
+        .disconnected { background: linear-gradient(45deg, rgba(244,67,54,0.3), rgba(198,40,40,0.3)); border-color: #F44336; }
+        .waiting { background: linear-gradient(45deg, rgba(255,193,7,0.3), rgba(255,152,0,0.3)); border-color: #FFC107; }
+        .footer { text-align: center; margin-top: 50px; color: #888; font-size: 0.9rem; padding: 20px; border-top: 1px solid rgba(255,255,255,0.1); }
+        @media (max-width: 768px) { h1 { font-size: 2rem; } .controls { flex-direction: column; align-items: center; } button { width: 90%; justify-content: center; } video { min-height: 400px; } }
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="live-badge">● مباشر</div>
-        <h2>📚 البث التعليمي المباشر (نظام جديد)</h2>
-        <div class="status disconnected" id="status">🔴 جاري الاتصال...</div>
-    </div>
-    
-    <div class="video-container">
-        <div class="loading" id="loading">
-            <div style="font-size: 24px; margin-bottom: 10px;">⏳</div>
-            <p id="loadingText">جاري الاتصال بالبث المباشر...</p>
-            <p style="font-size: 12px; color: #aaa; margin-top: 10px;" id="connectionInfo">
-                جاري البحث عن البث...
-            </p>
-            <button onclick="connectToBroadcast()" style="margin-top: 15px; background: #1a73e8;">
-                🔄 محاولة الاتصال
+    <div class="container">
+        <div class="header">
+            <div class="live-indicator">● بث مباشر</div>
+            <h1>📚 البث التعليمي المباشر</h1>
+            <p class="subtitle">مشاهدة حية مع المدرس - جودة عالية</p>
+        </div>
+        
+        <div class="connection-status disconnected" id="connectionStatus">
+            🔴 جاري الاتصال بالبث...
+        </div>
+        
+        <div class="video-container">
+            <div class="loading" id="loading">
+                <div class="loading-spinner"></div>
+                <h3 style="color: white; margin-bottom: 15px;">جاري الاتصال بالبث المباشر</h3>
+                <p id="loadingText" style="color: #aaa; margin-bottom: 25px;">يرجى الانتظار بينما نقوم بالاتصال بالمدرس...</p>
+                <button onclick="reconnect()" style="background: linear-gradient(45deg, #1a73e8, #0d47a1); padding: 15px 30px; font-size: 1rem;">
+                    🔄 إعادة المحاولة
+                </button>
+            </div>
+            <div class="overlay">
+                <div class="status-dot"></div>
+                <span>بث مباشر - جودة عالية</span>
+            </div>
+            <video id="remoteVideo" autoplay playsinline></video>
+        </div>
+        
+        <div class="controls">
+            <button onclick="toggleFullscreen()">
+                <span>📺</span>
+                <span>ملء الشاشة</span>
+            </button>
+            <button onclick="toggleAudio()" id="audioBtn" class="audio-btn">
+                <span>🔊</span>
+                <span>الصوت</span>
+            </button>
+            <button onclick="reconnect()" class="refresh-btn">
+                <span>🔄</span>
+                <span>إعادة الاتصال</span>
             </button>
         </div>
-        <canvas id="videoCanvas"></canvas>
-    </div>
-    
-    <div class="info-box" id="broadcastInfo" style="display: none;">
-        <p>👨‍🏫 المدرس: <span id="teacherStatus">نشط</span></p>
-        <p>🔄 آخر تحديث: <span id="lastUpdate">الآن</span></p>
-        <p>📊 جودة البث: <span id="quality">جيدة</span></p>
-    </div>
-    
-    <div class="controls">
-        <button onclick="toggleFullscreen()">📺 ملء الشاشة</button>
-        <button onclick="toggleAutoRefresh()" id="autoRefreshBtn">🔄 التحديث التلقائي: تشغيل</button>
-        <button onclick="checkBroadcastStatus()" id="checkBtn">🔍 فحص حالة البث</button>
-    </div>
-    
-    <div style="text-align: center; margin-top: 20px; color: #888; font-size: 12px;">
-        <p>🔊 تأكد من تشغيل الصوت | 📱 يدعم جميع الأجهزة</p>
-        <p>💡 <strong>معلومة:</strong> النظام الجديد يعمل بدون WebSocket - أكثر استقراراً</p>
+        
+        <div class="info-panel">
+            <div class="info-card">
+                <h3>👨‍🏫 المدرس</h3>
+                <div class="info-value" id="teacherStatus">جاري الاتصال...</div>
+                <p>حالة الاتصال بالمدرس</p>
+            </div>
+            <div class="info-card">
+                <h3>📶 الجودة</h3>
+                <div class="info-value" id="streamQuality">--</div>
+                <p>جودة البث الحالية</p>
+            </div>
+            <div class="info-card">
+                <h3>🕐 المدة</h3>
+                <div class="info-value" id="broadcastTime">00:00</div>
+                <p>مدة المشاهدة</p>
+            </div>
+            <div class="info-card">
+                <h3>🌐 الاتصال</h3>
+                <div class="info-value" id="networkStatus">--</div>
+                <p>حالة الشبكة</p>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>🔊 تأكد من تشغيل الصوت | 📱 يدعم جميع الأجهزة | ⚡ يعمل على أي متصفح حديث</p>
+            <p>لأي مشكلة: أعد تحميل الصفحة أو اتصل بالمدرس للحصول على رابط جديد</p>
+        </div>
     </div>
 
     <script>
-        let canvas, ctx;
-        let broadcastInterval;
-        let autoRefresh = true;
-        let lastFrameTime = 0;
-        let connectionAttempts = 0;
-        let roomId;
+        // العناصر
+        const remoteVideo = document.getElementById('remoteVideo');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const loadingDiv = document.getElementById('loading');
+        const loadingText = document.getElementById('loadingText');
+        const teacherStatus = document.getElementById('teacherStatus');
+        const streamQuality = document.getElementById('streamQuality');
+        const broadcastTime = document.getElementById('broadcastTime');
+        const networkStatus = document.getElementById('networkStatus');
+        const audioBtn = document.getElementById('audioBtn');
         
-        // الحصول على معرف الغرفة
+        // المتغيرات
+        let peerConnection = null;
+        let ws = null;
+        let roomId = null;
+        let isConnected = false;
+        let startTime = null;
+        let audioMuted = false;
+        let connectionAttempts = 0;
+        const MAX_ATTEMPTS = 10;
+        
+        // الحصول على معرف الغرفة من الرابط
         function getRoomId() {
             const urlParams = new URLSearchParams(window.location.search);
             const id = urlParams.get('room');
@@ -117,188 +152,288 @@
             if (!roomId) return;
             
             connectionAttempts++;
-            
-            // إعداد Canvas
-            canvas = document.getElementById('videoCanvas');
-            ctx = canvas.getContext('2d');
-            canvas.width = 640;
-            canvas.height = 480;
-            
-            // تحديث حالة الاتصال
-            updateStatus('🟡 جاري البحث عن البث...', 'waiting');
-            document.getElementById('loadingText').textContent = 'جاري البحث عن البث...';
-            document.getElementById('connectionInfo').textContent = `المحاولة: ${connectionAttempts}`;
-            
-            // طلب أولي للتحقق من وجود البث
-            checkBroadcastStatus();
-            
-            // بدء التحديث الدوري إذا كان البث نشطاً
-            if (autoRefresh) {
-                startBroadcastPolling();
-            }
-        }
-        
-        // التحقق من حالة البث
-        function checkBroadcastStatus() {
-            if (!roomId) return;
-            
-            fetch(`/student/stream?roomId=${roomId}&t=${Date.now()}`)
-                .then(response => response.json())
-                .then(data => {
-                    console.log('📡 استجابة السيرفر:', data.status);
-                    
-                    if (data.status === 'active' && data.frame) {
-                        // البث نشط وهناك إطار
-                        updateStatus('🟢 متصل - جاري البث', 'connected');
-                        document.getElementById('loading').style.display = 'none';
-                        document.getElementById('broadcastInfo').style.display = 'block';
-                        
-                        // عرض الإطار
-                        displayVideoFrame(data.frame);
-                        
-                        // تحديث المعلومات
-                        updateBroadcastInfo(data);
-                        
-                        // إعادة تعيين محاولات الاتصال
-                        connectionAttempts = 0;
-                        
-                    } else if (data.status === 'waiting') {
-                        // في انتظار بدء البث
-                        updateStatus('🟡 في انتظار بدء البث من المدرس...', 'waiting');
-                        document.getElementById('loading').style.display = 'block';
-                        document.getElementById('loadingText').textContent = 'في انتظار أن يبدأ المدرس البث...';
-                        document.getElementById('connectionInfo').textContent = 
-                            'تأكد من أن المدرس بدأ البث وأن الرابط صحيح';
-                        
-                        // إعادة المحاولة بعد 3 ثواني
-                        if (connectionAttempts < 10) {
-                            setTimeout(checkBroadcastStatus, 3000);
-                        }
-                        
-                    } else if (data.status === 'ended') {
-                        // البث انتهى
-                        showBroadcastEnded();
-                    }
-                })
-                .catch(error => {
-                    console.error('❌ خطأ في الاتصال:', error);
-                    
-                    if (connectionAttempts < 5) {
-                        updateStatus('🔴 خطأ في الاتصال - جاري إعادة المحاولة...', 'disconnected');
-                        setTimeout(checkBroadcastStatus, 2000);
-                    } else {
-                        showError('❌ فشل الاتصال بعد عدة محاولات. تأكد من:<br>' +
-                                 '1. اتصال الإنترنت<br>' +
-                                 '2. الرابط صحيح<br>' +
-                                 '3. المدرس بدأ البث');
-                    }
-                });
-        }
-        
-        // بدء الاستعلام الدوري عن البث
-        function startBroadcastPolling() {
-            if (broadcastInterval) {
-                clearInterval(broadcastInterval);
+            if (connectionAttempts > MAX_ATTEMPTS) {
+                showError('❌ فشل الاتصال بعد عدة محاولات. تأكد من صحة الرابط.');
+                return;
             }
             
-            broadcastInterval = setInterval(() => {
-                if (!roomId) return;
+            updateStatus('🟡 جاري الاتصال بخادم البث...', 'waiting');
+            loadingText.textContent = `المحاولة ${connectionAttempts} من ${MAX_ATTEMPTS}...`;
+            
+            // الاتصال بـ WebSocket
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                console.log('✅ تم الاتصال بخادم WebSocket');
+                updateStatus('🟡 متصل بالخادم - في انتظار البث...', 'waiting');
                 
-                fetch(`/student/stream?roomId=${roomId}&t=${Date.now()}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'active' && data.frame) {
-                            // تحديث الإطار
-                            displayVideoFrame(data.frame);
-                            updateBroadcastInfo(data);
-                            lastFrameTime = Date.now();
-                        } else if (data.status === 'ended') {
-                            showBroadcastEnded();
-                            clearInterval(broadcastInterval);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('❌ خطأ في التحديث:', error);
-                    });
+                // تسجيل كطالب
+                ws.send(JSON.stringify({
+                    type: 'register_student',
+                    roomId: roomId
+                }));
+                
+                loadingText.textContent = 'جاري انتظار بدء البث من المدرس...';
+                teacherStatus.textContent = 'في الانتظار...';
+            };
+            
+            ws.onmessage = async (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    await handleWebSocketMessage(data);
+                } catch (error) {
+                    console.error('❌ خطأ في معالجة الرسالة:', error);
+                }
+            };
+            
+            ws.onerror = (error) => {
+                console.error('❌ خطأ في WebSocket:', error);
+                
+                if (connectionAttempts <= 3) {
+                    updateStatus('🔴 خطأ في الاتصال - جاري إعادة المحاولة...', 'disconnected');
+                    setTimeout(() => {
+                        if (!isConnected) connectToBroadcast();
+                    }, 2000);
+                } else {
+                    showError('❌ فشل الاتصال بالخادم. تأكد من:<br>1. اتصال الإنترنت<br>2. الرابط صحيح<br>3. المدرس بدأ البث');
+                }
+            };
+            
+            ws.onclose = () => {
+                console.log('🔌 تم إغلاق اتصال WebSocket');
+                
+                if (isConnected) {
+                    updateStatus('🔴 انقطع الاتصال - جاري إعادة المحاولة...', 'disconnected');
+                    loadingDiv.style.display = 'block';
                     
-            }, 1000); // تحديث كل ثانية
+                    setTimeout(() => {
+                        if (!isConnected) connectToBroadcast();
+                    }, 3000);
+                }
+            };
         }
         
-        // عرض إطار الفيديو
-        function displayVideoFrame(frameData) {
-            if (!frameData) return;
-            
+        // معالجة رسائل WebSocket
+        async function handleWebSocketMessage(data) {
+            switch (data.type) {
+                case 'registered':
+                    console.log('✅ مسجل كطالب:', data.roomId);
+                    updateStatus('🟡 مسجل - في انتظار بدء البث...', 'waiting');
+                    break;
+                    
+                case 'offer':
+                    await handleOffer(data.sdp);
+                    break;
+                    
+                case 'ice_candidate':
+                    await handleIceCandidate(data.candidate);
+                    break;
+                    
+                case 'broadcast_status':
+                    updateTeacherStatus(data.status);
+                    break;
+                    
+                case 'broadcast_ended':
+                    showBroadcastEnded();
+                    break;
+            }
+        }
+        
+        // معالجة العرض من المدرس
+        async function handleOffer(sdp) {
             try {
-                const img = new Image();
-                img.onload = () => {
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                // إنشاء اتصال WebRTC
+                peerConnection = new RTCPeerConnection({
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun3.l.google.com:19302' },
+                        { urls: 'stun:stun4.l.google.com:19302' }
+                    ],
+                    iceTransportPolicy: 'all',
+                    bundlePolicy: 'max-bundle',
+                    rtcpMuxPolicy: 'require'
+                });
+                
+                // معالج تيار الوسائط البعيد
+                peerConnection.ontrack = (event) => {
+                    console.log('✅ تم استقبال تيار الوسائط');
+                    remoteVideo.srcObject = event.streams[0];
+                    
+                    // إخفاء شاشة التحميل
+                    loadingDiv.style.display = 'none';
+                    updateStatus('🟢 متصل - جاري البث', 'connected');
+                    teacherStatus.textContent = '🟢 متصل';
+                    streamQuality.textContent = 'عالية';
+                    
+                    isConnected = true;
+                    startTime = new Date();
+                    updateBroadcastTime();
+                    connectionAttempts = 0;
+                    
+                    // بدء مراقبة الجودة
+                    startQualityMonitoring();
                 };
-                img.onerror = () => {
-                    console.warn('⚠️ خطأ في تحميل صورة البث');
+                
+                // معالج ICE Candidate
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate && ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'ice_candidate',
+                            roomId: roomId,
+                            candidate: event.candidate,
+                            target: 'teacher'
+                        }));
+                    }
                 };
-                img.src = frameData;
+                
+                // معالج ICE Connection State
+                peerConnection.oniceconnectionstatechange = () => {
+                    console.log('ICE Connection State:', peerConnection.iceConnectionState);
+                    
+                    switch (peerConnection.iceConnectionState) {
+                        case 'connected':
+                        case 'completed':
+                            networkStatus.textContent = '🟢 ممتاز';
+                            streamQuality.textContent = 'عالية';
+                            break;
+                        case 'disconnected':
+                            networkStatus.textContent = '🟡 ضعيف';
+                            streamQuality.textContent = 'متوسطة';
+                            break;
+                        case 'failed':
+                            networkStatus.textContent = '🔴 فاشل';
+                            streamQuality.textContent = 'ضعيفة';
+                            reconnect();
+                            break;
+                    }
+                };
+                
+                // تعيين الوصف البعيد
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+                
+                // إنشاء الإجابة
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                
+                // إرسال الإجابة للمدرس
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'answer',
+                        roomId: roomId,
+                        sdp: answer
+                    }));
+                }
+                
+                updateStatus('🟢 متصل! جاري استقبال البث...', 'connected');
+                
             } catch (error) {
-                console.error('❌ خطأ في عرض الفيديو:', error);
+                console.error('❌ خطأ في معالجة العرض:', error);
+                showError('❌ خطأ في الاتصال: ' + error.message);
             }
         }
         
-        // تحديث معلومات البث
-        function updateBroadcastInfo(data) {
-            const now = Date.now();
-            const lastUpdate = data.timestamp;
-            const diff = now - lastUpdate;
-            
-            // تحديث وقت آخر تحديث
-            let timeText = 'الآن';
-            if (diff > 1000) {
-                const seconds = Math.floor(diff / 1000);
-                timeText = `قبل ${seconds} ثانية`;
+        // معالجة ICE Candidate من المدرس
+        async function handleIceCandidate(candidate) {
+            if (peerConnection && candidate) {
+                try {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                } catch (error) {
+                    console.error('❌ خطأ في إضافة ICE Candidate:', error);
+                }
             }
+        }
+        
+        // تحديث حالة المدرس
+        function updateTeacherStatus(status) {
+            teacherStatus.textContent = status === 'active' ? '🟢 نشط' : '🟡 غير نشط';
+        }
+        
+        // مراقبة جودة البث
+        function startQualityMonitoring() {
+            setInterval(() => {
+                if (!peerConnection || !isConnected) return;
+                
+                const stats = peerConnection.getStats();
+                stats.then(report => {
+                    report.forEach(stat => {
+                        if (stat.type === 'inbound-rtp' && stat.kind === 'video') {
+                            const frameRate = stat.framesPerSecond || 0;
+                            const bitrate = (stat.bytesReceived * 8) / 1000;
+                            
+                            let quality = 'عالية';
+                            if (frameRate < 15 || bitrate < 500) quality = 'متوسطة';
+                            if (frameRate < 10 || bitrate < 200) quality = 'ضعيفة';
+                            
+                            streamQuality.textContent = quality;
+                        }
+                    });
+                });
+            }, 5000);
+        }
+        
+        // تحديث وقت البث
+        function updateBroadcastTime() {
+            if (!startTime) return;
             
-            document.getElementById('lastUpdate').textContent = timeText;
-            
-            // تحديث حالة المدرس
-            const teacherStatus = diff < 5000 ? 'نشط' : (diff < 10000 ? 'بطيء' : 'غير متصل');
-            document.getElementById('teacherStatus').textContent = teacherStatus;
-            
-            // تحديث جودة البث
-            const frameCount = data.frameCount || 0;
-            const quality = frameCount > 5 ? 'ممتازة' : (frameCount > 2 ? 'جيدة' : 'ضعيفة');
-            document.getElementById('quality').textContent = quality;
+            setInterval(() => {
+                const now = new Date();
+                const diff = Math.floor((now - startTime) / 1000);
+                const hours = Math.floor(diff / 3600);
+                const minutes = Math.floor((diff % 3600) / 60);
+                const seconds = diff % 60;
+                
+                let timeStr = '';
+                if (hours > 0) {
+                    timeStr += hours.toString().padStart(2, '0') + ':';
+                }
+                timeStr += minutes.toString().padStart(2, '0') + ':' + 
+                          seconds.toString().padStart(2, '0');
+                
+                broadcastTime.textContent = timeStr;
+            }, 1000);
         }
         
         // تحديث حالة الاتصال
         function updateStatus(message, className) {
-            const statusElement = document.getElementById('status');
-            statusElement.textContent = message;
-            statusElement.className = 'status ' + className;
+            connectionStatus.textContent = message;
+            connectionStatus.className = `connection-status ${className}`;
         }
         
-        // عرض خطأ
+        // عرض الخطأ
         function showError(message) {
             updateStatus(message, 'disconnected');
-            document.getElementById('loadingText').innerHTML = message;
-            document.getElementById('loading').style.display = 'block';
+            loadingText.innerHTML = message + '<br><br>جاري إعادة المحاولة...';
+            loadingDiv.style.display = 'block';
         }
         
         // عرض نهاية البث
         function showBroadcastEnded() {
             updateStatus('⏹️ انتهى البث المباشر', 'disconnected');
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('loadingText').innerHTML = `
-                <div style="font-size: 24px; margin-bottom: 10px;">🏁</div>
-                <p>انتهى البث المباشر</p>
-                <p>اتصل بالمدرس لبدء بث جديد</p>
+            loadingDiv.style.display = 'block';
+            loadingText.innerHTML = `
+                <div style="font-size: 2rem; margin-bottom: 15px;">🏁</div>
+                <h3 style="color: white; margin-bottom: 10px;">انتهى البث المباشر</h3>
+                <p style="color: #aaa; margin-bottom: 20px;">اتصل بالمدرس لبدء بث جديد</p>
             `;
-            document.getElementById('broadcastInfo').style.display = 'none';
+            isConnected = false;
             
-            if (broadcastInterval) {
-                clearInterval(broadcastInterval);
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            
+            if (ws) {
+                ws.close();
+                ws = null;
             }
         }
         
-        // تبديل وضع ملء الشاشة
+        // ملء الشاشة
         function toggleFullscreen() {
             const container = document.querySelector('.video-container');
             
@@ -311,27 +446,63 @@
             }
         }
         
-        // تبديل التحديث التلقائي
-        function toggleAutoRefresh() {
-            const btn = document.getElementById('autoRefreshBtn');
-            autoRefresh = !autoRefresh;
-            
-            if (autoRefresh) {
-                btn.textContent = '🔄 التحديث التلقائي: تشغيل';
-                startBroadcastPolling();
+        // تبديل الصوت
+        function toggleAudio() {
+            if (audioMuted) {
+                remoteVideo.muted = false;
+                audioBtn.innerHTML = '<span>🔊</span><span>الصوت</span>';
+                audioMuted = false;
             } else {
-                btn.textContent = '🔄 التحديث التلقائي: إيقاف';
-                if (broadcastInterval) {
-                    clearInterval(broadcastInterval);
-                }
+                remoteVideo.muted = true;
+                audioBtn.innerHTML = '<span>🔇</span><span>كتم</span>';
+                audioMuted = true;
             }
+        }
+        
+        // إعادة الاتصال
+        function reconnect() {
+            connectionAttempts = 0;
+            
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+            
+            updateStatus('🔄 جاري إعادة الاتصال...', 'waiting');
+            loadingDiv.style.display = 'block';
+            loadingText.textContent = 'جاري إعادة الاتصال بالبث...';
+            
+            setTimeout(connectToBroadcast, 1000);
         }
         
         // بدء الاتصال عند تحميل الصفحة
         window.onload = function() {
-            console.log('🚀 صفحة المشاهدة جاهزة (نظام جديد)');
+            console.log('🚀 صفحة المشاهدة جاهزة');
             connectToBroadcast();
+            
+            // تحقق تلقائي من الاتصال كل 30 ثانية
+            setInterval(() => {
+                if (!isConnected && connectionAttempts < MAX_ATTEMPTS) {
+                    console.log('🔄 تحقق تلقائي من الاتصال...');
+                    reconnect();
+                }
+            }, 30000);
         };
+        
+        // إغلاق الاتصال عند مغادرة الصفحة
+        window.addEventListener('beforeunload', () => {
+            if (peerConnection) {
+                peerConnection.close();
+            }
+            if (ws) {
+                ws.close();
+            }
+        });
     </script>
 </body>
-</html>
+    </html>
