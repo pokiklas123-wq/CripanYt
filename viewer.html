@@ -42,7 +42,6 @@
                 <div style="font-size: 50px;">📺</div>
                 <h3 id="overlayText">في انتظار البث...</h3>
             </div>
-            <!-- playsinline مهم جداً للموبايل -->
             <video id="remoteVideo" autoplay playsinline controls></video>
         </div>
         
@@ -66,7 +65,8 @@
             socket: null,
             peerConnection: null,
             roomId: '',
-            playPromise: undefined // لتتبع حالة التشغيل ومنع التضارب
+            viewerId: '',
+            playPromise: undefined
         };
         
         function log(msg) {
@@ -99,7 +99,12 @@
             
             state.socket.onopen = () => {
                 log('✅ متصل بالسيرفر');
-                state.socket.send(JSON.stringify({ type: 'join-room', roomId: state.roomId }));
+                state.viewerId = 'viewer_' + Date.now();
+                state.socket.send(JSON.stringify({ 
+                    type: 'join-room', 
+                    roomId: state.roomId,
+                    viewerId: state.viewerId 
+                }));
             };
             
             state.socket.onmessage = async (event) => {
@@ -108,19 +113,24 @@
                 if (data.type === 'room-joined') {
                     log('✅ تم الانضمام للغرفة. بانتظار المذيع...');
                     elements.overlayText.textContent = "بانتظار إشارة الفيديو...";
+                    updateStatus('متصل - بانتظار البث...', 'connecting');
                 } 
                 else if (data.type === 'error') {
                     alert(data.message);
                     location.reload();
                 }
-                else if (data.type === 'offer') {
-                    handleOffer(data);
+                else if (data.type === 'media-stream') {
+                    handleMediaStream(data);
                 }
                 else if (data.type === 'ice-candidate') {
                     if (state.peerConnection) {
                         state.peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate))
                         .catch(e => console.error(e));
                     }
+                }
+                else if (data.type === 'broadcaster-left') {
+                    alert('📢 المديع أنهى البث');
+                    location.reload();
                 }
             };
             
@@ -130,8 +140,8 @@
             };
         }
 
-        async function handleOffer(data) {
-            log('📨 استلام عرض (Offer) من المذيع');
+        async function handleMediaStream(data) {
+            log('📨 استلام تيار وسائط من SFU');
             
             if (state.peerConnection) state.peerConnection.close();
             
@@ -139,7 +149,7 @@
                 iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
             });
 
-            // ✅ الحل الجذري لمشكلة DOMException هنا
+            // ✅ الحل الجذري لمشكلة DOMException
             state.peerConnection.ontrack = (event) => {
                 log(`🎬 استلام تراك: ${event.track.kind}`);
                 
@@ -157,7 +167,7 @@
                         type: 'ice-candidate',
                         candidate: event.candidate,
                         roomId: state.roomId,
-                        targetId: data.senderId // الرد على المذيع المحدد
+                        targetId: data.senderId
                     }));
                 }
             };
@@ -175,7 +185,10 @@
                 }
             };
 
-            await state.peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+            await state.peerConnection.setRemoteDescription(
+                new RTCSessionDescription({ type: 'offer', sdp: data.sdp })
+            );
+            
             const answer = await state.peerConnection.createAnswer();
             await state.peerConnection.setLocalDescription(answer);
             
@@ -185,17 +198,16 @@
                 roomId: state.roomId,
                 targetId: data.senderId
             }));
+            
             log('📤 تم إرسال الموافقة (Answer)');
         }
 
-        // ✅ دالة تشغيل آمنة تتوافق مع توصيات Chrome Developer
+        // ✅ دالة تشغيل آمنة
         function safePlayVideo() {
             const video = elements.remoteVideo;
             
-            // إذا كان الفيديو يعمل بالفعل، لا تفعل شيئاً
             if (!video.paused) return;
 
-            // محاولة التشغيل
             state.playPromise = video.play();
 
             if (state.playPromise !== undefined) {
@@ -205,7 +217,6 @@
                 })
                 .catch(error => {
                     log(`⚠️ منع التشغيل التلقائي: ${error.name}`);
-                    // إذا فشل التشغيل التلقائي، أظهر زر للمستخدم
                     elements.overlay.style.display = 'flex';
                     elements.overlayText.innerHTML = `<button onclick="elements.remoteVideo.play(); this.parentElement.parentElement.style.display='none'">اضغط للتشغيل</button>`;
                 });
