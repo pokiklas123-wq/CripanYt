@@ -1,31 +1,32 @@
 <!DOCTYPE html>
-<html>
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <title>المديع - بث مباشر</title>
     <style>
-        body { font-family: Arial; padding: 20px; background: #1a1a2e; color: white; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background: #1a1a2e; color: white; }
         .container { max-width: 800px; margin: auto; }
-        input, button { width: 100%; padding: 12px; margin: 8px 0; font-size: 16px; border-radius: 5px; border: none; }
-        input { background: #16213e; color: white; }
-        button { background: #4361ee; color: white; cursor: pointer; }
+        input, button { width: 100%; padding: 12px; margin: 8px 0; font-size: 16px; border-radius: 5px; border: none; box-sizing: border-box; }
+        input { background: #16213e; color: white; border: 1px solid #30475e; }
+        button { background: #4361ee; color: white; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        button:hover { background: #3f37c9; }
         button:disabled { background: #555; cursor: not-allowed; }
-        video { width: 100%; background: black; border-radius: 10px; margin: 10px 0; }
-        .status { padding: 10px; border-radius: 5px; margin: 10px 0; text-align: center; }
-        .connected { background: #2ec4b6; }
+        video { width: 100%; background: black; border-radius: 10px; margin: 10px 0; transform: scaleX(-1); }
+        .status { padding: 10px; border-radius: 5px; margin: 10px 0; text-align: center; font-weight: bold; }
+        .connected { background: #2ec4b6; color: #000; }
         .disconnected { background: #e71d36; }
-        .connecting { background: #f8961e; }
-        .log { background: #000; color: #0f0; padding: 10px; border-radius: 5px; font-family: monospace; height: 200px; overflow-y: scroll; }
+        .connecting { background: #f8961e; color: #000; }
+        .log { background: #000; color: #0f0; padding: 10px; border-radius: 5px; font-family: monospace; height: 150px; overflow-y: scroll; direction: ltr; text-align: left; font-size: 12px; border: 1px solid #333; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>🎥 المديع - بث مباشر</h2>
+        <h2>🎥 المديع - لوحة التحكم</h2>
         
         <div>
-            <label>معرف البث:</label>
-            <input type="text" id="roomId" value="test123">
-            <div id="viewerUrl" style="color: #4cc9f0; word-break: break-all; margin: 10px 0;"></div>
+            <label>معرف الغرفة:</label>
+            <input type="text" id="roomId" value="live1">
+            <div id="viewerUrl" style="color: #4cc9f0; word-break: break-all; margin: 10px 0; font-size: 14px;"></div>
         </div>
         
         <button id="startBtn">▶ بدء البث</button>
@@ -33,22 +34,19 @@
         
         <div id="status" class="status disconnected">🔴 غير متصل</div>
         
-        <div>
-            <label>كاميرا المديع:</label>
-            <video id="localVideo" autoplay muted playsinline></video>
+        <video id="localVideo" autoplay muted playsinline></video>
+        
+        <div style="text-align: center; margin-top: 10px;">
+            <label>👁️ المشاهدون المتصلون:</label>
+            <div id="viewerCount" style="font-size: 32px; font-weight: bold; color: #4cc9f0;">0</div>
         </div>
         
-        <div style="text-align: center;">
-            <label>👁️ المشاهدون:</label>
-            <div id="viewerCount" style="font-size: 32px; font-weight: bold;">0</div>
-        </div>
-        
-        <h3>📋 سجل الأحداث:</h3>
+        <h3>📋 سجل النظام:</h3>
         <div id="log" class="log"></div>
     </div>
 
     <script>
-        const SERVER = 'wss://cripanyt.onrender.com';
+        const SERVER = 'wss://cripanyt.onrender.com'; // تأكد من أن هذا الرابط صحيح ويعمل
         
         const elements = {
             roomId: document.getElementById('roomId'),
@@ -64,15 +62,15 @@
         let state = {
             stream: null,
             socket: null,
-            peerConnections: new Map(),
+            peerConnections: {}, // Object to store PCs by viewerId
             roomId: '',
             viewerCount: 0
         };
         
-        function log(message) {
+        function log(msg) {
             const time = new Date().toLocaleTimeString();
-            elements.log.innerHTML = `[${time}] ${message}<br>` + elements.log.innerHTML;
-            console.log(message);
+            elements.log.innerHTML = `[${time}] ${msg}<br>` + elements.log.innerHTML;
+            console.log(msg);
         }
         
         function updateStatus(text, className) {
@@ -80,174 +78,109 @@
             elements.status.className = `status ${className}`;
         }
         
-        // بدء البث
         elements.startBtn.onclick = async () => {
+            state.roomId = elements.roomId.value.trim();
+            if(!state.roomId) return alert("أدخل معرف الغرفة");
+
+            // 1. تشغيل الكاميرا أولاً
             try {
-                state.roomId = elements.roomId.value.trim() || 'live-' + Date.now();
-                elements.roomId.value = state.roomId;
-                
-                log(`🚀 بدء البث: ${state.roomId}`);
-                updateStatus('جاري الاتصال...', 'connecting');
-                
-                // إنشاء رابط المشاهدة
-                const baseUrl = window.location.href.replace('broadcaster.html', '');
-                const viewerUrl = `${baseUrl}viewer.html?room=${state.roomId}`;
-                elements.viewerUrl.innerHTML = `🔗 رابط المشاهدة: <a href="${viewerUrl}" target="_blank" style="color: #80ffdb;">${viewerUrl}</a>`;
-                
-                // الاتصال بالسيرفر
-                state.socket = new WebSocket(SERVER);
-                
-                state.socket.onopen = () => {
-                    log('✅ متصل بالسيرفر');
-                    
-                    // تشغيل الكاميرا
-                    navigator.mediaDevices.getUserMedia({
-                        video: true,
-                        audio: true
-                    }).then(stream => {
-                        state.stream = stream;
-                        elements.localVideo.srcObject = stream;
-                        log(`✅ الكاميرا تعمل`);
-                        
-                        // إنشاء الغرفة
-                        state.socket.send(JSON.stringify({
-                            type: 'create-room',
-                            roomId: state.roomId
-                        }));
-                        
-                        elements.startBtn.disabled = true;
-                        elements.stopBtn.disabled = false;
-                        
-                        updateStatus(`🎥 البث مباشر - ${state.roomId}`, 'connected');
-                        log('✅ البث يعمل الآن!');
-                        
-                    }).catch(error => {
-                        log(`❌ خطأ في الكاميرا: ${error.message}`);
-                        updateStatus('فشل تشغيل الكاميرا', 'disconnected');
-                    });
-                };
-                
-                state.socket.onmessage = (event) => {
-                    try {
-                        const data = JSON.parse(event.data);
-                        
-                        if (data.type === 'new-viewer') {
-                            state.viewerCount++;
-                            elements.viewerCount.textContent = state.viewerCount;
-                            log(`👤 مشاهد جديد (${state.viewerCount})`);
-                            
-                            createPeerConnection(data.viewerId);
-                        }
-                    } catch (error) {
-                        log(`❌ خطأ في الرسالة: ${error}`);
-                    }
-                };
-                
-                state.socket.onerror = (error) => {
-                    log(`❌ خطأ في الاتصال: ${error}`);
-                };
-                
-                state.socket.onclose = () => {
-                    log('🔌 انقطع الاتصال بالسيرفر');
-                };
-                
-            } catch (error) {
-                log(`❌ خطأ: ${error.message}`);
-                updateStatus('فشل بدء البث', 'disconnected');
+                state.stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                elements.localVideo.srcObject = state.stream;
+                log("✅ تم تشغيل الكاميرا");
+            } catch (e) {
+                log("❌ فشل الوصول للكاميرا: " + e.message);
+                return;
             }
-        };
-        
-        // إنشاء اتصال WebRTC مع مشاهد
-        async function createPeerConnection(viewerId) {
-            try {
-                log(`🔗 إنشاء اتصال مع ${viewerId}`);
+
+            // 2. الاتصال بالسيرفر
+            updateStatus('جاري الاتصال بالسيرفر...', 'connecting');
+            state.socket = new WebSocket(SERVER);
+            
+            state.socket.onopen = () => {
+                log('✅ متصل بسيرفر الإشارة');
+                state.socket.send(JSON.stringify({ type: 'create-room', roomId: state.roomId }));
                 
-                const pc = new RTCPeerConnection({
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
-                    ]
-                });
+                elements.startBtn.disabled = true;
+                elements.stopBtn.disabled = false;
+                updateStatus(`📡 البث مباشر: ${state.roomId}`, 'connected');
                 
-                // إضافة تيار الوسائط
-                if (state.stream) {
-                    state.stream.getTracks().forEach(track => {
-                        pc.addTrack(track, state.stream);
-                    });
+                // رابط المشاهدة
+                const url = location.href.replace('broadcaster.html', 'viewer.html') + '?room=' + state.roomId;
+                elements.viewerUrl.innerHTML = `🔗 رابط المشاهدة: <a href="${url}" target="_blank" style="color:#80ffdb">${url}</a>`;
+            };
+            
+            state.socket.onmessage = async (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'new-viewer') {
+                    handleNewViewer(data.viewerId);
+                } else if (data.type === 'answer') {
+                    const pc = state.peerConnections[data.senderId];
+                    if (pc) {
+                        await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+                        log(`✅ تم استلام الموافقة (Answer) من ${data.senderId}`);
+                    }
+                } else if (data.type === 'ice-candidate') {
+                    const pc = state.peerConnections[data.senderId];
+                    if (pc && data.candidate) {
+                        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+                    }
                 }
-                
-                // ICE Candidates
-                pc.onicecandidate = (event) => {
-                    if (event.candidate && state.socket) {
-                        state.socket.send(JSON.stringify({
-                            type: 'ice-candidate',
-                            candidate: event.candidate,
-                            roomId: state.roomId,
-                            targetId: viewerId
-                        }));
-                    }
-                };
-                
-                // حالة الاتصال
-                pc.onconnectionstatechange = () => {
-                    if (pc.connectionState === 'connected') {
-                        log(`✅ ${viewerId} متصل`);
-                    } else if (pc.connectionState === 'disconnected') {
-                        log(`❌ ${viewerId} انقطع`);
-                    }
-                };
-                
-                // إنشاء العرض
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                
-                // إرسال العرض
-                state.socket.send(JSON.stringify({
-                    type: 'offer',
-                    offer: offer,
-                    roomId: state.roomId,
-                    targetId: viewerId
-                }));
-                
-                log(`📨 أرسل عرض إلى ${viewerId}`);
-                
-                state.peerConnections.set(viewerId, pc);
-                
-            } catch (error) {
-                log(`❌ خطأ في الاتصال: ${error.message}`);
-            }
+            };
+
+            state.socket.onclose = () => updateStatus('🔴 انقطع الاتصال', 'disconnected');
         };
-        
-        // إيقاف البث
-        elements.stopBtn.onclick = () => {
-            log('⏹️ إيقاف البث...');
+
+        async function handleNewViewer(viewerId) {
+            log(`👤 مشاهد جديد يحاول الاتصال: ${viewerId}`);
             
-            // إيقاف الكاميرا
-            if (state.stream) {
-                state.stream.getTracks().forEach(track => track.stop());
-                elements.localVideo.srcObject = null;
-            }
+            const pc = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            });
             
-            // إغلاق اتصالات WebRTC
-            state.peerConnections.forEach(pc => pc.close());
-            state.peerConnections.clear();
+            state.peerConnections[viewerId] = pc;
             
-            // إغلاق WebSocket
-            if (state.socket) {
-                state.socket.close();
-            }
+            // إضافة التراكات
+            state.stream.getTracks().forEach(track => pc.addTrack(track, state.stream));
             
-            // إعادة تعيين
-            state.viewerCount = 0;
-            elements.viewerCount.textContent = '0';
-            elements.startBtn.disabled = false;
-            elements.stopBtn.disabled = true;
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    state.socket.send(JSON.stringify({
+                        type: 'ice-candidate',
+                        candidate: event.candidate,
+                        roomId: state.roomId,
+                        targetId: viewerId
+                    }));
+                }
+            };
             
-            updateStatus('🔴 البث متوقف', 'disconnected');
-            log('✅ تم إيقاف البث');
-        };
-        
-        log('📱 صفحة المديع جاهزة');
+            pc.onconnectionstatechange = () => {
+                if (pc.connectionState === 'connected') {
+                    log(`✅ المشاهد ${viewerId} متصل الآن`);
+                    state.viewerCount++;
+                    elements.viewerCount.textContent = state.viewerCount;
+                } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+                    log(`❌ المشاهد ${viewerId} غادر`);
+                    pc.close();
+                    delete state.peerConnections[viewerId];
+                    state.viewerCount = Math.max(0, state.viewerCount - 1);
+                    elements.viewerCount.textContent = state.viewerCount;
+                }
+            };
+
+            // إنشاء العرض (Offer)
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            
+            state.socket.send(JSON.stringify({
+                type: 'offer',
+                offer: offer,
+                roomId: state.roomId,
+                targetId: viewerId // مهم جداً: إرسال العرض لهذا المشاهد فقط
+            }));
+        }
+
+        elements.stopBtn.onclick = () => location.reload();
     </script>
 </body>
 </html>
