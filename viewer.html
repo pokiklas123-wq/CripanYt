@@ -1,15 +1,40 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>المشاهد - مشاهدة البث</title>
     <style>
-        body { font-family: Arial; padding: 20px; background: #f0f0f0; }
-        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 10px; }
-        input, button { width: 100%; padding: 10px; margin: 10px 0; font-size: 16px; }
-        video { width: 100%; background: black; border-radius: 5px; }
-        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
-        .connected { background: #d4edda; color: #155724; }
-        .disconnected { background: #f8d7da; color: #721c24; }
+        body { font-family: Arial; padding: 20px; background: #1a1a2e; color: white; }
+        .container { max-width: 800px; margin: auto; }
+        input, button, select { 
+            width: 100%; 
+            padding: 12px; 
+            margin: 8px 0; 
+            font-size: 16px; 
+            border-radius: 5px; 
+            border: 1px solid #4cc9f0; 
+            background: #16213e; 
+            color: white; 
+        }
+        button { background: #7209b7; cursor: pointer; }
+        button:disabled { background: #555; cursor: not-allowed; }
+        video { width: 100%; background: black; border-radius: 10px; margin: 10px 0; }
+        .status { padding: 10px; border-radius: 5px; margin: 10px 0; }
+        .green { background: #2ec4b6; }
+        .red { background: #e71d36; }
+        .yellow { background: #f8961e; }
+        .overlay { 
+            position: absolute; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%); 
+            text-align: center; 
+            color: white;
+            background: rgba(0,0,0,0.8);
+            padding: 30px;
+            border-radius: 10px;
+        }
+        .log { background: #000; color: #0f0; padding: 10px; border-radius: 5px; font-family: monospace; height: 150px; overflow-y: scroll; }
     </style>
 </head>
 <body>
@@ -18,243 +43,266 @@
         
         <div>
             <label>معرف البث:</label>
-            <input type="text" id="roomId" placeholder="أدخل معرف البث">
-            <small>انسخ المعرف من المديع</small>
+            <input type="text" id="roomId" placeholder="أدخل معرف البث هنا">
+            <small>انسخ المعرف من المديع أو من الرابط</small>
         </div>
         
         <button id="joinBtn">🚀 انضم للبث</button>
         <button id="leaveBtn" disabled>👋 مغادرة البث</button>
         
-        <div class="status disconnected" id="status">لم تنضم بعد</div>
+        <div id="status" class="status red">🔴 غير متصل</div>
         
-        <div style="margin-top: 20px;">
-            <label>بث المديع:</label>
+        <div style="position: relative;">
             <video id="remoteVideo" autoplay playsinline></video>
-            <div id="videoMessage" style="text-align: center; color: #666; padding: 20px;">
-                ⏳ في انتظار البث...
+            <div id="overlay" class="overlay">
+                <div style="font-size: 48px;">📺</div>
+                <h3>في انتظار البث</h3>
+                <p>أدخل معرف البث واضغط "انضم للبث"</p>
             </div>
         </div>
+        
+        <h3>📋 سجل الأحداث:</h3>
+        <div id="log" class="log"></div>
     </div>
 
     <script>
-        // العناصر الأساسية
-        const roomIdInput = document.getElementById('roomId');
-        const joinBtn = document.getElementById('joinBtn');
-        const leaveBtn = document.getElementById('leaveBtn');
-        const statusDiv = document.getElementById('status');
-        const remoteVideo = document.getElementById('remoteVideo');
-        const videoMessage = document.getElementById('videoMessage');
+        // === الإعدادات ===
+        const SERVER = 'wss://cripanyt.onrender.com';
+        const ICE_SERVERS = [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' }
+        ];
         
-        // المتغيرات
-        let socket = null;
-        let peerConnection = null;
-        let currentRoomId = '';
-        
-        // إعدادات WebRTC
-        const config = {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ]
+        // === العناصر ===
+        const elements = {
+            roomId: document.getElementById('roomId'),
+            joinBtn: document.getElementById('joinBtn'),
+            leaveBtn: document.getElementById('leaveBtn'),
+            status: document.getElementById('status'),
+            remoteVideo: document.getElementById('remoteVideo'),
+            overlay: document.getElementById('overlay'),
+            log: document.getElementById('log')
         };
         
-        // سيرفر الإشارة
-        const SIGNALING_SERVER = 'wss://cripanyt.onrender.com';
+        // === الحالة ===
+        let state = {
+            socket: null,
+            peerConnection: null,
+            roomId: '',
+            isConnected: false,
+            reconnectAttempts: 0
+        };
         
-        // 1. الحصول على المعرف من الرابط
+        // === الدوال المساعدة ===
+        function log(message) {
+            const time = new Date().toLocaleTimeString();
+            elements.log.innerHTML = `[${time}] ${message}<br>` + elements.log.innerHTML;
+            console.log(message);
+        }
+        
+        function updateStatus(text, color) {
+            elements.status.textContent = text;
+            elements.status.className = `status ${color}`;
+        }
+        
+        // === 1. الحصول على المعرف من الرابط ===
         window.onload = () => {
             const urlParams = new URLSearchParams(window.location.search);
             const room = urlParams.get('room');
+            
             if (room) {
-                roomIdInput.value = room;
-                setTimeout(() => joinBtn.click(), 500); // انضم تلقائياً
+                elements.roomId.value = room;
+                log(`📋 تم تحميل المعرف من الرابط: ${room}`);
+                
+                // انضم تلقائياً بعد ثانيتين
+                setTimeout(() => {
+                    log('⏳ الانضمام التلقائي...');
+                    elements.joinBtn.click();
+                }, 2000);
             }
         };
         
-        // 2. الانضمام للبث
-        joinBtn.onclick = async () => {
+        // === 2. الانضمام للبث ===
+        elements.joinBtn.onclick = async () => {
             try {
-                currentRoomId = roomIdInput.value.trim();
-                if (!currentRoomId) {
-                    alert('أدخل معرف البث');
+                state.roomId = elements.roomId.value.trim();
+                
+                if (!state.roomId) {
+                    alert('⚠️ أدخل معرف البث أولاً');
                     return;
                 }
                 
-                updateStatus('جاري الاتصال...', 'disconnected');
-                videoMessage.textContent = '⏳ جاري الاتصال بالبث...';
+                log(`🚀 الانضمام للبث: ${state.roomId}`);
+                updateStatus('جاري الاتصال...', 'yellow');
                 
-                // الاتصال بسيرفر الإشارة
-                connectToSignalingServer();
+                elements.overlay.innerHTML = `
+                    <div style="font-size: 48px;">⏳</div>
+                    <h3>جاري الاتصال...</h3>
+                    <p>الغرفة: <strong>${state.roomId}</strong></p>
+                    <p>يرجى الانتظار...</p>
+                `;
                 
-                // إنشاء اتصال WebRTC
+                // 1. الاتصال بالسيرفر
+                await connectToServer();
+                
+                // 2. إرسال طلب الانضمام
+                state.socket.send(JSON.stringify({
+                    type: 'join-room',
+                    roomId: state.roomId,
+                    viewerId: 'viewer-' + Date.now(),
+                    timestamp: Date.now()
+                }));
+                
+                // 3. إنشاء اتصال WebRTC
                 createPeerConnection();
                 
-                // طلب الانضمام للغرفة
-                setTimeout(() => {
-                    if (socket && socket.readyState === WebSocket.OPEN) {
-                        socket.send(JSON.stringify({
-                            type: 'join-room',
-                            roomId: currentRoomId,
-                            viewerId: 'viewer-' + Date.now()
-                        }));
-                    }
-                }, 500);
+                // 4. تحديث الواجهة
+                elements.joinBtn.disabled = true;
+                elements.leaveBtn.disabled = false;
                 
-                joinBtn.disabled = true;
-                leaveBtn.disabled = false;
+                log('✅ تم إرسال طلب الانضمام');
                 
             } catch (error) {
-                console.error('خطأ:', error);
-                updateStatus('فشل الاتصال', 'disconnected');
+                log(`❌ خطأ: ${error.message}`);
+                updateStatus('فشل الاتصال', 'red');
+                elements.overlay.innerHTML = `
+                    <div style="font-size: 48px;">❌</div>
+                    <h3>فشل الاتصال</h3>
+                    <p>${error.message}</p>
+                `;
             }
         };
         
-        // 3. مغادرة البث
-        leaveBtn.onclick = () => {
-            if (peerConnection) {
-                peerConnection.close();
-                peerConnection = null;
-            }
-            
-            if (socket) {
-                socket.send(JSON.stringify({
-                    type: 'leave-room',
-                    roomId: currentRoomId
-                }));
-                socket.close();
-            }
-            
-            remoteVideo.srcObject = null;
-            videoMessage.textContent = '📺 في انتظار البث...';
-            videoMessage.style.display = 'block';
-            
-            joinBtn.disabled = false;
-            leaveBtn.disabled = true;
-            
-            updateStatus('غادرت البث', 'disconnected');
-        };
-        
-        // 4. الاتصال بسيرفر الإشارة
-        function connectToSignalingServer() {
-            socket = new WebSocket(SIGNALING_SERVER);
-            
-            socket.onopen = () => {
-                console.log('✅ متصل بالسيرفر');
-            };
-            
-            socket.onmessage = async (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    console.log('📩 رسالة:', data.type);
-                    
-                    switch (data.type) {
-                        case 'room-joined':
-                            console.log('✅ انضممت للغرفة');
-                            updateStatus('جاري الاتصال بالمديع...', 'disconnected');
-                            break;
-                            
-                        case 'offer':
-                            handleOffer(data);
-                            break;
-                            
-                        case 'ice-candidate':
-                            handleIceCandidate(data);
-                            break;
-                            
-                        case 'broadcaster-left':
-                            alert('📢 المديع أنهى البث');
-                            leaveBtn.click();
-                            break;
-                            
-                        case 'error':
-                            alert(`❌ خطأ: ${data.message}`);
-                            leaveBtn.click();
-                            break;
-                    }
-                } catch (error) {
-                    console.error('خطأ في معالجة الرسالة:', error);
-                }
-            };
-            
-            socket.onerror = (error) => {
-                console.error('❌ خطأ في الاتصال:', error);
-            };
-        };
-        
-        // 5. إنشاء اتصال WebRTC
-        function createPeerConnection() {
-            peerConnection = new RTCPeerConnection(config);
-            
-            // استقبال الفيديو والصوت
-            peerConnection.ontrack = (event) => {
-                console.log('🎬 تم استقبال:', event.track.kind);
+        // === 3. الاتصال بالسيرفر ===
+        function connectToServer() {
+            return new Promise((resolve, reject) => {
+                state.socket = new WebSocket(SERVER);
                 
-                if (remoteVideo.srcObject !== event.streams[0]) {
-                    remoteVideo.srcObject = event.streams[0];
-                    videoMessage.style.display = 'none';
+                state.socket.onopen = () => {
+                    log('✅ متصل بسيرفر الإشارة');
+                    updateStatus('متصل بالسيرفر', 'green');
+                    state.reconnectAttempts = 0;
+                    resolve();
+                };
+                
+                state.socket.onmessage = async (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        log(`📩 ${data.type}`);
+                        
+                        switch (data.type) {
+                            case 'welcome':
+                                log(`📞 ${data.message}`);
+                                break;
+                                
+                            case 'room-joined':
+                                handleRoomJoined(data);
+                                break;
+                                
+                            case 'offer':
+                                handleOffer(data);
+                                break;
+                                
+                            case 'ice-candidate':
+                                handleIceCandidate(data);
+                                break;
+                                
+                            case 'broadcaster-left':
+                                alert('📢 المديع أنهى البث');
+                                leaveStream();
+                                break;
+                                
+                            case 'error':
+                                log(`❌ خطأ من السيرفر: ${data.message}`);
+                                updateStatus('خطأ: ' + data.message, 'red');
+                                break;
+                        }
+                    } catch (error) {
+                        log(`❌ خطأ في الرسالة: ${error}`);
+                    }
+                };
+                
+                state.socket.onerror = (error) => {
+                    log(`❌ خطأ في الاتصال: ${error}`);
+                    reject(error);
+                };
+                
+                state.socket.onclose = () => {
+                    log('🔌 انقطع الاتصال بالسيرفر');
+                    
+                    if (state.isConnected && state.reconnectAttempts < 3) {
+                        state.reconnectAttempts++;
+                        const delay = state.reconnectAttempts * 2000;
+                        
+                        log(`♻️ إعادة الاتصال بعد ${delay}ms...`);
+                        
+                        setTimeout(() => {
+                            connectToServer().catch(console.error);
+                        }, delay);
+                    }
+                };
+            });
+        };
+        
+        // === 4. معالجة الانضمام للغرفة ===
+        function handleRoomJoined(data) {
+            log(`✅ انضممت للغرفة: ${data.roomId}`);
+            updateStatus('بانتظار البث من المديع...', 'yellow');
+            
+            elements.overlay.innerHTML = `
+                <div style="font-size: 48px;">✅</div>
+                <h3>تم الانضمام للغرفة</h3>
+                <p>بانتظار البث من المديع...</p>
+            `;
+        };
+        
+        // === 5. إنشاء اتصال WebRTC ===
+        function createPeerConnection() {
+            log('🔗 إنشاء اتصال WebRTC...');
+            
+            state.peerConnection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+            
+            // === الاستقبال ===
+            state.peerConnection.ontrack = (event) => {
+                log(`🎬 تم استقبال ${event.track.kind}`);
+                
+                if (event.streams && event.streams[0]) {
+                    elements.remoteVideo.srcObject = event.streams[0];
                     
                     // تشغيل الفيديو
-                    remoteVideo.play().then(() => {
-                        console.log('✅ بدأ تشغيل الفيديو');
-                        updateStatus('🎥 تشاهد بثاً مباشراً', 'connected');
-                    }).catch(e => {
-                        console.error('❌ خطأ في التشغيل:', e);
+                    elements.remoteVideo.play().then(() => {
+                        log('▶️ بدأ تشغيل الفيديو');
+                        
+                        state.isConnected = true;
+                        elements.overlay.style.display = 'none';
+                        
+                        updateStatus('🎥 تشاهد بثاً مباشراً', 'green');
+                        
+                        log('✅ البث يعمل!');
+                        
+                    }).catch(error => {
+                        log(`❌ خطأ في تشغيل الفيديو: ${error.message}`);
                     });
                 }
             };
             
-            // إرسال مرشحات ICE
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate && socket) {
-                    socket.send(JSON.stringify({
+            // === ICE Candidates ===
+            state.peerConnection.onicecandidate = (event) => {
+                if (event.candidate && state.socket) {
+                    state.socket.send(JSON.stringify({
                         type: 'ice-candidate',
                         candidate: event.candidate,
-                        roomId: currentRoomId
+                        roomId: state.roomId,
+                        senderId: 'viewer'
                     }));
                 }
             };
             
-            // مراقبة حالة الاتصال
-            peerConnection.onconnectionstatechange = () => {
-                console.log('حالة الاتصال:', peerConnection.connectionState);
-            };
-        };
-        
-        // 6. معالجة العرض من المديع
-        async function handleOffer(data) {
-            if (!peerConnection || !data.offer) return;
-            
-            try {
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+            // === مراقبة الحالة ===
+            state.peerConnection.onconnectionstatechange = () => {
+                const status = state.peerConnection.connectionState;
+                log(`📊 حالة الاتصال: ${status}`);
                 
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
-                
-                if (socket) {
-                    socket.send(JSON.stringify({
-                        type: 'answer',
-                        answer: answer,
-                        roomId: currentRoomId
-                    }));
-                }
-            } catch (error) {
-                console.error('خطأ في العرض:', error);
-            }
-        };
-        
-        // 7. معالجة مرشحات ICE
-        function handleIceCandidate(data) {
-            if (peerConnection && data.candidate) {
-                peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate))
-                    .catch(e => console.error('خطأ في ICE:', e));
-            }
-        };
-        
-        // 8. تحديث الحالة
-        function updateStatus(message, type) {
-            statusDiv.textContent = message;
-            statusDiv.className = `status ${type}`;
-        };
-    </script>
-</body>
-</html>
+                if (status === 'connected') {
+                    log('✅ اتصال WebRTC ناجح!');
