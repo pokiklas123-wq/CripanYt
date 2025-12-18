@@ -17,20 +17,20 @@
         .disconnected { background: #e71d36; }
         .connecting { background: #f8961e; color: #000; }
         .log { background: #000; color: #0f0; padding: 10px; border-radius: 5px; font-family: monospace; height: 150px; overflow-y: scroll; direction: ltr; text-align: left; font-size: 12px; border: 1px solid #333; }
+        .url-container { background: #16213e; padding: 15px; border-radius: 10px; margin: 15px 0; }
+        .url-item { margin: 10px 0; padding: 10px; background: #0f3460; border-radius: 5px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>🎥 المديع - بث لـ 100 مشاهد</h2>
+        <h2 style="text-align: center; color: #4cc9f0;">🎥 المديع - بث لـ 100 مشاهد</h2>
         
-        <div>
-            <label>معرف الغرفة:</label>
-            <input type="text" id="roomId" value="live1">
-            <div id="viewerUrl" style="color: #4cc9f0; word-break: break-all; margin: 10px 0; font-size: 14px;"></div>
+        <div class="input-group">
+            <label>🔑 معرف الغرفة:</label>
+            <input type="text" id="roomId" value="live1" placeholder="أدخل معرف الغرفة">
+            <button id="startBtn">▶ بدء البث</button>
+            <button id="stopBtn" disabled>⏹ إيقاف البث</button>
         </div>
-        
-        <button id="startBtn">▶ بدء البث</button>
-        <button id="stopBtn" disabled>⏹ إيقاف البث</button>
         
         <div id="status" class="status disconnected">🔴 غير متصل</div>
         
@@ -40,8 +40,22 @@
             <label>👁️ المشاهدون: <span id="viewerCount" style="font-size: 24px; color: #4cc9f0;">0</span>/100</label>
         </div>
         
+        <div class="url-container" id="urlContainer" style="display: none;">
+            <h3>🔗 روابط البث:</h3>
+            <div class="url-item">
+                <strong>رابط صفحة المشاهد:</strong>
+                <div id="viewerUrl" style="word-break: break-all; color: #80ffdb; margin-top: 5px;"></div>
+                <button onclick="copyToClipboard('viewerUrl')" style="margin-top: 10px; padding: 5px 10px; background: #7209b7; color: white; border: none; border-radius: 3px; cursor: pointer;">نسخ الرابط</button>
+            </div>
+            <div class="url-item">
+                <strong>رابط مشغل فيديو عادي:</strong>
+                <div id="playerUrl" style="word-break: break-all; color: #80ffdb; margin-top: 5px;"></div>
+                <button onclick="copyToClipboard('playerUrl')" style="margin-top: 10px; padding: 5px 10px; background: #7209b7; color: white; border: none; border-radius: 3px; cursor: pointer;">نسخ الرابط</button>
+            </div>
+        </div>
+        
         <h3>📋 سجل النظام:</h3>
-        <div id="log" class="log"></div>
+        <div id="log" class="log">جاري تهيئة النظام...</div>
     </div>
 
     <script>
@@ -54,17 +68,20 @@
             status: document.getElementById('status'),
             localVideo: document.getElementById('localVideo'),
             viewerCount: document.getElementById('viewerCount'),
+            log: document.getElementById('log'),
+            urlContainer: document.getElementById('urlContainer'),
             viewerUrl: document.getElementById('viewerUrl'),
-            log: document.getElementById('log')
+            playerUrl: document.getElementById('playerUrl')
         };
         
         let state = {
             stream: null,
             socket: null,
-            peerConnection: null, // اتصال واحد فقط مع SFU
+            peerConnection: null,
             roomId: '',
             viewerCount: 0,
-            iceCandidatesQueue: []
+            iceCandidatesQueue: [],
+            reconnectAttempts: 0
         };
         
         function log(msg) {
@@ -78,6 +95,23 @@
             elements.status.className = `status ${className}`;
         }
         
+        function copyToClipboard(elementId) {
+            const text = document.getElementById(elementId).textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('تم نسخ الرابط إلى الحافظة');
+            });
+        }
+        
+        function showUrls() {
+            const baseUrl = window.location.origin + window.location.pathname;
+            const viewerUrl = baseUrl.replace('broadcaster.html', 'viewer.html') + '?room=' + encodeURIComponent(state.roomId);
+            const playerUrl = baseUrl.replace('broadcaster.html', 'player.html') + '?room=' + encodeURIComponent(state.roomId);
+            
+            elements.viewerUrl.textContent = viewerUrl;
+            elements.playerUrl.textContent = playerUrl;
+            elements.urlContainer.style.display = 'block';
+        }
+        
         elements.startBtn.onclick = async () => {
             state.roomId = elements.roomId.value.trim();
             if(!state.roomId) return alert("أدخل معرف الغرفة");
@@ -85,22 +119,39 @@
             // 1. تشغيل الكاميرا
             try {
                 state.stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { width: 1280, height: 720 },
-                    audio: true 
+                    video: { 
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        frameRate: { ideal: 30 }
+                    },
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
                 });
                 elements.localVideo.srcObject = state.stream;
-                log("✅ تم تشغيل الكاميرا");
+                log("✅ تم تشغيل الكاميرا والصوت");
             } catch (e) {
-                log("❌ فشل الوصول للكاميرا: " + e.message);
+                log("❌ فشل الوصول للكاميرا/الميكروفون: " + e.message);
                 return;
             }
 
             // 2. الاتصال بالسيرفر SFU
             updateStatus('جاري الاتصال بالسيرفر...', 'connecting');
+            connectToServer();
+        };
+
+        function connectToServer() {
+            if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+                state.socket.close();
+            }
+            
             state.socket = new WebSocket(SERVER);
             
             state.socket.onopen = () => {
                 log('✅ متصل بسيرفر SFU');
+                state.reconnectAttempts = 0;
                 state.socket.send(JSON.stringify({ 
                     type: 'create-room', 
                     roomId: state.roomId 
@@ -112,48 +163,80 @@
                 // إنشاء اتصال WebRTC مع SFU
                 createSFUConnection();
                 
-                // رابط المشاهدة
-                const url = location.href.replace('broadcaster.html', 'viewer.html') + '?room=' + state.roomId;
-                elements.viewerUrl.innerHTML = `🔗 رابط المشاهدة: <a href="${url}" target="_blank" style="color:#80ffdb">${url}</a>`;
+                // عرض الروابط
+                showUrls();
             };
             
             state.socket.onmessage = async (event) => {
-                const data = JSON.parse(event.data);
-                
-                if (data.type === 'room-created') {
-                    log(`✅ الغرفة جاهزة لـ ${data.maxViewers} مشاهد`);
-                    updateStatus(`📡 البث مباشر: ${state.roomId}`, 'connected');
-                } 
-                else if (data.type === 'new-viewer') {
-                    state.viewerCount = data.totalViewers;
-                    elements.viewerCount.textContent = `${state.viewerCount}/100`;
-                    log(`👤 مشاهد جديد (${state.viewerCount}/100)`);
-                }
-                else if (data.type === 'viewer-left') {
-                    state.viewerCount = data.totalViewers;
-                    elements.viewerCount.textContent = `${state.viewerCount}/100`;
-                    log(`👋 مشاهد غادر (${state.viewerCount}/100)`);
-                }
-                else if (data.type === 'answer') {
-                    if (state.peerConnection) {
-                        await state.peerConnection.setRemoteDescription(
-                            new RTCSessionDescription(data.answer)
-                        );
-                        log('✅ تم استلام الرد من SFU');
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.type === 'room-created') {
+                        log(`✅ الغرفة "${state.roomId}" جاهزة لـ ${data.maxViewers} مشاهد`);
+                        updateStatus(`📡 البث مباشر: ${state.roomId}`, 'connected');
+                    } 
+                    else if (data.type === 'new-viewer') {
+                        state.viewerCount = data.totalViewers;
+                        elements.viewerCount.textContent = `${state.viewerCount}/100`;
+                        log(`👤 مشاهد جديد (${state.viewerCount}/100)`);
                     }
-                }
-                else if (data.type === 'ice-candidate') {
-                    if (state.peerConnection) {
-                        await state.peerConnection.addIceCandidate(
-                            new RTCIceCandidate(data.candidate)
-                        );
+                    else if (data.type === 'viewer-left') {
+                        state.viewerCount = data.totalViewers;
+                        elements.viewerCount.textContent = `${state.viewerCount}/100`;
+                        log(`👋 مشاهد غادر (${state.viewerCount}/100)`);
                     }
+                    else if (data.type === 'answer') {
+                        if (state.peerConnection && state.peerConnection.signalingState !== 'closed') {
+                            try {
+                                await state.peerConnection.setRemoteDescription(
+                                    new RTCSessionDescription(data.answer)
+                                );
+                                log('✅ تم استلام الرد من SFU');
+                            } catch (error) {
+                                log(`❌ خطأ في معالجة الرد: ${error}`);
+                            }
+                        }
+                    }
+                    else if (data.type === 'ice-candidate') {
+                        if (state.peerConnection && state.peerConnection.remoteDescription) {
+                            try {
+                                await state.peerConnection.addIceCandidate(
+                                    new RTCIceCandidate(data.candidate)
+                                );
+                                log('✅ تم إضافة مرشح ICE من مشاهد');
+                            } catch (error) {
+                                log(`⚠️ خطأ في إضافة مرشح ICE: ${error}`);
+                            }
+                        } else {
+                            // تخزين مرشحات ICE حتى يكون الاتصال جاهزاً
+                            state.iceCandidatesQueue.push(data.candidate);
+                            log('📥 مرشح ICE في قائمة الانتظار');
+                        }
+                    }
+                    else if (data.type === 'error') {
+                        log(`❌ خطأ: ${data.message}`);
+                    }
+                } catch (error) {
+                    log(`❌ خطأ في معالجة الرسالة: ${error}`);
                 }
             };
 
             state.socket.onclose = () => {
                 log('🔌 انقطع الاتصال بالسيرفر');
                 updateStatus('🔴 انقطع الاتصال', 'disconnected');
+                
+                // محاولة إعادة الاتصال
+                if (state.reconnectAttempts < 5) {
+                    state.reconnectAttempts++;
+                    log(`🔄 محاولة إعادة الاتصال ${state.reconnectAttempts}/5...`);
+                    setTimeout(connectToServer, 3000);
+                } else {
+                    alert('فشل إعادة الاتصال بالسيرفر. الرجاء تحديث الصفحة.');
+                }
+            };
+            
+            state.socket.onerror = (error) => {
+                log(`❌ خطأ في الاتصال: ${error.message}`);
             };
         };
 
@@ -163,7 +246,9 @@
             state.peerConnection = new RTCPeerConnection({
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:stun3.l.google.com:19302' }
                 ]
             });
             
@@ -174,7 +259,7 @@
             
             // ICE Candidates
             state.peerConnection.onicecandidate = (event) => {
-                if (event.candidate && state.socket) {
+                if (event.candidate && state.socket && state.socket.readyState === WebSocket.OPEN) {
                     state.socket.send(JSON.stringify({
                         type: 'ice-candidate',
                         candidate: event.candidate,
@@ -183,23 +268,56 @@
                 }
             };
             
-            // إنشاء العرض وإرساله لـ SFU
-            const offer = await state.peerConnection.createOffer({
-                offerToReceiveAudio: false,
-                offerToReceiveVideo: false
-            });
+            state.peerConnection.oniceconnectionstatechange = () => {
+                const iceState = state.peerConnection.iceConnectionState;
+                log(`حالة ICE: ${iceState}`);
+                
+                if (iceState === 'failed' || iceState === 'disconnected') {
+                    log('⚠️ مشكلة في اتصال ICE، جاري إعادة الاتصال...');
+                    if (state.peerConnection) {
+                        state.peerConnection.restartIce();
+                    }
+                }
+            };
             
-            await state.peerConnection.setLocalDescription(offer);
+            state.peerConnection.onconnectionstatechange = () => {
+                const connectionState = state.peerConnection.connectionState;
+                log(`حالة الاتصال: ${connectionState}`);
+                
+                if (connectionState === 'connected') {
+                    log('✅ اتصال WebRTC نشط مع SFU');
+                    
+                    // معالجة مرشحات ICE المعلقة
+                    while (state.iceCandidatesQueue.length > 0) {
+                        const candidate = state.iceCandidatesQueue.shift();
+                        state.peerConnection.addIceCandidate(new RTCIceCandidate(candidate))
+                            .catch(e => log(`❌ خطأ في إضافة مرشح ICE معلق: ${e}`));
+                    }
+                }
+            };
             
-            // إرسال العرض إلى SFU (سيوزعه على جميع المشاهدين)
-            state.socket.send(JSON.stringify({
-                type: 'broadcast-media',
-                roomId: state.roomId,
-                sdp: offer,
-                mediaType: 'video'
-            }));
-            
-            log('📤 أرسل تيار الوسائط إلى SFU');
+            try {
+                // إنشاء العرض وإرساله لـ SFU
+                const offer = await state.peerConnection.createOffer({
+                    offerToReceiveAudio: false,
+                    offerToReceiveVideo: false,
+                    iceRestart: true
+                });
+                
+                await state.peerConnection.setLocalDescription(offer);
+                
+                // إرسال العرض إلى SFU (سيوزعه على جميع المشاهدين)
+                state.socket.send(JSON.stringify({
+                    type: 'broadcast-media',
+                    roomId: state.roomId,
+                    sdp: offer,
+                    mediaType: 'video'
+                }));
+                
+                log('📤 أرسل تيار الوسائط إلى SFU');
+            } catch (error) {
+                log(`❌ فشل إنشاء اتصال WebRTC: ${error}`);
+            }
         }
 
         elements.stopBtn.onclick = () => {
@@ -214,11 +332,31 @@
             }
             
             if (state.socket) {
+                state.socket.send(JSON.stringify({
+                    type: 'leave-room',
+                    roomId: state.roomId
+                }));
                 state.socket.close();
             }
             
             location.reload();
         };
+
+        // بدء تشغيل الكاميرا مسبقاً
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // طلب صلاحيات الكاميرا مسبقاً
+                state.stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480 },
+                    audio: true 
+                });
+                elements.localVideo.srcObject = state.stream;
+                log("✅ الكاميرا جاهزة");
+                state.stream.getTracks().forEach(track => track.stop()); // إيقاف مؤقت
+            } catch (e) {
+                log("ℹ️ الكاميرا غير متاحة حالياً، سيتم طلبها عند بدء البث");
+            }
+        });
     </script>
 </body>
 </html>
