@@ -1,132 +1,145 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>المعلم - بث SFU</title>
+    <title>المذيع</title>
     <style>
-        body { background: #1a1a2e; color: white; font-family: sans-serif; text-align: center; }
-        video { width: 60%; background: black; border-radius: 10px; margin-top: 20px; }
-        button { padding: 10px 20px; font-size: 18px; cursor: pointer; background: #4361ee; color: white; border: none; border-radius: 5px; }
+        body { font-family: Arial; padding: 20px; }
+        video { width: 100%; max-width: 600px; background: #000; }
+        button { padding: 10px 20px; margin: 5px; }
+        #status { padding: 10px; margin: 10px 0; }
     </style>
-    <!-- مكتبة Socket.io -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.min.js"></script>
-    <!-- مكتبة Mediasoup Client -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mediasoup-client/3.6.85/mediasoup-client.min.js"></script>
 </head>
 <body>
-    <h1>🎥 لوحة تحكم المعلم</h1>
-    <button id="btnLocalVideo">1. تشغيل الكاميرا</button>
-    <button id="btnStart" disabled>2. بدء البث (Live)</button>
-    <br>
-    <video id="localVideo" autoplay playsinline muted></video>
-    <div id="status"></div>
-
+    <h1>🎥 المذيع</h1>
+    
+    <div>
+        <input type="text" id="roomId" value="live1" placeholder="Room ID">
+        <button id="startBtn">بدء البث</button>
+        <button id="stopBtn" disabled>إيقاف</button>
+    </div>
+    
+    <div id="status">جاهز</div>
+    
+    <video id="localVideo" autoplay muted playsinline></video>
+    <div>المشاهدون: <span id="viewerCount">0</span></div>
+    
     <script>
-        const ioClient = io;
-        const mediasoupClient = mediasoupClient;
-        
-        const socket = io("http://localhost:3000"); // ⚠️ غيّر هذا لرابط سيرفرك
-        
-        let device;
-        let producerTransport;
-        let videoProducer;
-        let audioProducer;
+        const SERVER = 'wss://cripanyt.onrender.com';
         let localStream;
-
-        const btnLocalVideo = document.getElementById('btnLocalVideo');
-        const btnStart = document.getElementById('btnStart');
-        const status = document.getElementById('status');
-
-        // 1. تشغيل الكاميرا
-        btnLocalVideo.addEventListener('click', async () => {
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                document.getElementById('localVideo').srcObject = localStream;
-                btnStart.disabled = false;
-                btnLocalVideo.disabled = true;
-            } catch (error) {
-                console.error('Error accessing media devices.', error);
-            }
-        });
-
-        // 2. الاتصال بالسيرفر وبدء البث
-        btnStart.addEventListener('click', () => {
-            btnStart.disabled = true;
-            joinRoom();
-        });
-
-        socket.on('connection-success', ({ socketId }) => {
-            console.log("Connected to server:", socketId);
-        });
-
-        async function joinRoom() {
-            // 1. الحصول على قدرات الراوتر
-            socket.emit('getRouterRtpCapabilities', async (rtpCapabilities) => {
-                // تحميل الجهاز (Device)
-                device = new mediasoupClient.Device();
-                await device.load({ routerRtpCapabilities: rtpCapabilities });
-
-                // 2. إنشاء Transport للإرسال
-                createSendTransport();
-            });
-        }
-
-        function createSendTransport() {
-            socket.emit('createWebRtcTransport', { sender: true }, ({ params }) => {
-                if (params.error) {
-                    console.log(params.error);
-                    return;
-                }
-
-                // إنشاء Transport من جهة العميل
-                producerTransport = device.createSendTransport(params);
-
-                // حدث الاتصال
-                producerTransport.on('connect', async ({ dtlsParameters }, callback, errback) => {
-                    try {
-                        socket.emit('transport-connect', { dtlsParameters });
-                        callback();
-                    } catch (error) {
-                        errback(error);
-                    }
-                });
-
-                // حدث الإنتاج (Produce)
-                producerTransport.on('produce', async (parameters, callback, errback) => {
-                    try {
-                        socket.emit('transport-produce', {
-                            kind: parameters.kind,
-                            rtpParameters: parameters.rtpParameters,
-                            appData: parameters.appData,
-                        }, ({ id }) => {
-                            callback({ id });
-                        });
-                    } catch (error) {
-                        errback(error);
-                    }
-                });
-
-                connectSendTransport();
-            });
-        }
-
-        async function connectSendTransport() {
-            // إرسال الفيديو
-            const videoTrack = localStream.getVideoTracks()[0];
-            const audioTrack = localStream.getAudioTracks()[0];
-
-            videoProducer = await producerTransport.produce({ track: videoTrack });
-            audioProducer = await producerTransport.produce({ track: audioTrack });
-
-            status.innerHTML = "✅ البث مباشر الآن!";
+        let peerConnections = new Map();
+        let socket;
+        let roomId;
+        
+        document.getElementById('startBtn').onclick = startBroadcast;
+        document.getElementById('stopBtn').onclick = stopBroadcast;
+        
+        async function startBroadcast() {
+            roomId = document.getElementById('roomId').value;
+            if (!roomId) return alert('أدخل معرف الغرفة');
             
-            videoProducer.on('trackended', () => {
-                console.log('video track ended');
+            try {
+                // الحصول على الكاميرا والصوت
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: true
+                });
+                
+                document.getElementById('localVideo').srcObject = localStream;
+                document.getElementById('status').textContent = 'جاري الاتصال...';
+                
+                // الاتصال بالسيرفر
+                socket = new WebSocket(SERVER);
+                
+                socket.onopen = () => {
+                    socket.send(JSON.stringify({
+                        type: 'create-room',
+                        roomId: roomId
+                    }));
+                    document.getElementById('status').textContent = 'البث جاهز';
+                    document.getElementById('startBtn').disabled = true;
+                    document.getElementById('stopBtn').disabled = false;
+                };
+                
+                socket.onmessage = async (event) => {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.type === 'room-created') {
+                        console.log('✅ Room created');
+                    }
+                    else if (data.type === 'viewer-joined') {
+                        document.getElementById('viewerCount').textContent = data.total;
+                        createPeerConnection(data.viewerId);
+                    }
+                    else if (data.type === 'answer') {
+                        const pc = peerConnections.get(data.viewerId);
+                        if (pc) {
+                            await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+                        }
+                    }
+                    else if (data.type === 'ice-candidate') {
+                        const pc = peerConnections.get(data.viewerId);
+                        if (pc) {
+                            await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+                        }
+                    }
+                };
+                
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        function createPeerConnection(viewerId) {
+            const pc = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
             });
-
-            videoProducer.on('transportclose', () => {
-                console.log('video transport closed');
+            
+            // إضافة تيار الوسائط
+            localStream.getTracks().forEach(track => {
+                pc.addTrack(track, localStream);
             });
+            
+            // إرسال ICE candidates
+            pc.onicecandidate = (event) => {
+                if (event.candidate && socket.readyState === 1) {
+                    socket.send(JSON.stringify({
+                        type: 'ice-candidate',
+                        candidate: event.candidate,
+                        roomId: roomId
+                    }));
+                }
+            };
+            
+            // إنشاء العرض وإرساله
+            pc.createOffer()
+                .then(offer => pc.setLocalDescription(offer))
+                .then(() => {
+                    socket.send(JSON.stringify({
+                        type: 'offer',
+                        sdp: pc.localDescription,
+                        roomId: roomId
+                    }));
+                });
+            
+            peerConnections.set(viewerId, pc);
+        }
+        
+        function stopBroadcast() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            
+            if (socket) {
+                socket.close();
+            }
+            
+            peerConnections.forEach(pc => pc.close());
+            peerConnections.clear();
+            
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('status').textContent = 'متوقف';
+            document.getElementById('viewerCount').textContent = '0';
         }
     </script>
 </body>
