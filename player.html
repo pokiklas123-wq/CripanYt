@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>مشغل البث المباشر</title>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: black; }
+        video { width: 100%; height: 100%; object-fit: contain; }
+        .loading { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); color: white; display: flex;
+            flex-direction: column; justify-content: center; align-items: center;
+            z-index: 100; font-family: Arial, sans-serif;
+        }
+        .error { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); color: white; display: none;
+            flex-direction: column; justify-content: center; align-items: center;
+            z-index: 100; font-family: Arial, sans-serif;
+        }
+        .controls {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); padding: 10px; border-radius: 10px;
+            display: flex; gap: 10px; z-index: 50;
+        }
+        .controls button {
+            background: #7209b7; color: white; border: none; padding: 10px 15px;
+            border-radius: 5px; cursor: pointer; font-size: 14px;
+        }
+        .controls button:hover { background: #5a08a1; }
+    </style>
+</head>
+<body>
+    <div class="loading" id="loading">
+        <h2>جاري تحميل البث...</h2>
+        <p id="statusText">جاري الاتصال بالسيرفر</p>
+    </div>
+    
+    <div class="error" id="error">
+        <h2>⚠️ خطأ</h2>
+        <p id="errorText"></p>
+        <button onclick="location.reload()">إعادة المحاولة</button>
+    </div>
+    
+    <video id="remoteVideo" autoplay playsinline controls></video>
+    
+    <div class="controls">
+        <button onclick="toggleFullscreen()">ملء الشاشة</button>
+        <button onclick="location.reload()">إعادة التحميل</button>
+        <button onclick="window.open('viewer.html?room=' + getRoomId(), '_blank')">فتح في صفحة جديدة</button>
+    </div>
+
+    <script>
+        const SERVER = 'wss://cripanyt.onrender.com';
+        let socket = null;
+        let peerConnection = null;
+        let roomId = '';
+        let viewerId = '';
+
+        function getRoomId() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('room') || '';
+        }
+
+        function showError(message) {
+            document.getElementById('errorText').textContent = message;
+            document.getElementById('error').style.display = 'flex';
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function toggleFullscreen() {
+            const video = document.getElementById('remoteVideo');
+            if (!document.fullscreenElement) {
+                if (video.requestFullscreen) {
+                    video.requestFullscreen();
+                } else if (video.webkitRequestFullscreen) {
+                    video.webkitRequestFullscreen();
+                } else if (video.msRequestFullscreen) {
+                    video.msRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+            }
+        }
+
+        async function init() {
+            roomId = getRoomId();
+            if (!roomId) {
+                showError('لم يتم تحديد معرف البث. الرجاء استخدام رابط صحيح.');
+                return;
+            }
+
+            viewerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+            document.getElementById('statusText').textContent = 'جاري الاتصال...';
+
+            try {
+                await connectToServer();
+            } catch (error) {
+                showError(`خطأ في الاتصال: ${error.message}`);
+            }
+        }
+
+        async function connectToServer() {
+            socket = new WebSocket(SERVER);
+            
+            socket.onopen = () => {
+                document.getElementById('statusText').textContent = 'جاري الانضمام للبث...';
+                socket.send(JSON.stringify({ 
+                    type: 'join-room', 
+                    roomId: roomId,
+                    viewerId: viewerId 
+                }));
+            };
+            
+            socket.onmessage = async (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'room-joined') {
+                    document.getElementById('statusText').textContent = 'بانتظار البث...';
+                } 
+                else if (data.type === 'error') {
+                    showError(data.message);
+                }
+                else if (data.type === 'media-stream') {
+                    document.getElementById('statusText').textContent = 'جاري استقبال الفيديو...';
+                    await handleMediaStream(data);
+                }
+                else if (data.type === 'ice-candidate') {
+                    if (peerConnection && peerConnection.remoteDescription) {
+                        await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                    }
+                }
+                else if (data.type === 'broadcaster-left') {
+                    showError('انتهى البث المباشر');
+                }
+            };
+            
+            socket.onclose = () => {
+                showError('انقطع الاتصال بالسيرفر');
+            };
+        }
+
+        async function handleMediaStream(data) {
+            if (peerConnection) {
+                peerConnection.close();
+            }
+            
+            peerConnection = new RTCPeerConnection({
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            });
+
+            peerConnection.ontrack = (event) => {
+                const video = document.getElementById('remoteVideo');
+                if (video.srcObject !== event.streams[0]) {
+                    video.srcObject = event.streams[0];
+                    video.play().then(() => {
+                        document.getElementById('loading').style.display = 'none';
+                        document.getElementById('error').style.display = 'none';
+                    }).catch(error => {
+                        console.error('خطأ في تشغيل الفيديو:', error);
+                    });
+                }
+            };
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate && socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({
+                        type: 'ice-candidate',
+                        candidate: event.candidate,
+                        roomId: roomId,
+                        targetId: 'broadcaster'
+                    }));
+                }
+            };
+
+            try {
+                await peerConnection.setRemoteDescription(
+                    new RTCSessionDescription({ type: 'offer', sdp: data.sdp })
+                );
+                
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                
+                socket.send(JSON.stringify({
+                    type: 'answer',
+                    answer: answer,
+                    roomId: roomId,
+                    viewerId: viewerId
+                }));
+            } catch (error) {
+                console.error('خطأ في معالجة تيار الوسائط:', error);
+                showError('خطأ في تشغيل الفيديو');
+            }
+        }
+
+        // بدء التحميل عند تحميل الصفحة
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
