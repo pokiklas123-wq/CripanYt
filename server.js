@@ -2,20 +2,20 @@ const WebSocket = require('ws');
 const http = require('http');
 
 const server = http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain', 'Content-Type': 'text/html; charset=utf-8' });
-    res.end('✅ WebRTC SFU Server - يدعم 100 مشاهد');
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end('✅ WebRTC SFU Server - يعمل بشكل صحيح');
 });
 
 const wss = new WebSocket.Server({ server });
 const rooms = new Map();
 
-console.log('🚀 Starting WebRTC SFU Server (50-100 viewers)...');
+console.log('🚀 Starting WebRTC SFU Server...');
 
 wss.on('connection', (ws, req) => {
     ws.id = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
     console.log(`✅ Client connected: ${ws.id}`);
 
-    ws.on('message', (message) => {
+    ws.on('message', async (message) => {
         try {
             const data = JSON.parse(message.toString());
             
@@ -67,7 +67,7 @@ wss.on('connection', (ws, req) => {
                         }));
                         
                         // ✅ إرسال البث الحالي للمشاهد الجديد فوراً
-                        if (room.mediaInfo) {
+                        if (room.mediaInfo && room.mediaInfo.sdp) {
                             setTimeout(() => {
                                 if (ws.readyState === 1) {
                                     ws.send(JSON.stringify({
@@ -104,9 +104,9 @@ wss.on('connection', (ws, req) => {
                     if (rooms.has(data.roomId)) {
                         const room = rooms.get(data.roomId);
                         if (room.broadcaster === ws) {
-                            // ✅ تخزين معلومات البث
+                            // ✅ تخزين SDP كنص وليس كائن
                             room.mediaInfo = {
-                                sdp: data.sdp,
+                                sdp: data.sdp, // الآن هو نص SDP
                                 type: data.mediaType || 'video',
                                 timestamp: Date.now()
                             };
@@ -117,7 +117,7 @@ wss.on('connection', (ws, req) => {
                                     viewer.send(JSON.stringify({
                                         type: 'media-stream',
                                         roomId: data.roomId,
-                                        sdp: data.sdp,
+                                        sdp: data.sdp, // إرسال نص SDP
                                         mediaType: data.mediaType || 'video',
                                         senderId: 'broadcaster'
                                     }));
@@ -132,7 +132,6 @@ wss.on('connection', (ws, req) => {
                 case 'answer':
                     if (rooms.has(data.roomId)) {
                         const room = rooms.get(data.roomId);
-                        // إرسال الإجابة للمذيع فقط
                         if (room.broadcaster && room.broadcaster.readyState === 1) {
                             room.broadcaster.send(JSON.stringify({
                                 type: 'answer',
@@ -147,7 +146,6 @@ wss.on('connection', (ws, req) => {
                     if (rooms.has(data.roomId)) {
                         const room = rooms.get(data.roomId);
                         if (data.targetId === 'broadcaster') {
-                            // إرسال إلى المذيع
                             if (room.broadcaster && room.broadcaster.readyState === 1) {
                                 room.broadcaster.send(JSON.stringify({
                                     type: 'ice-candidate',
@@ -156,7 +154,6 @@ wss.on('connection', (ws, req) => {
                                 }));
                             }
                         } else {
-                            // إرسال إلى مشاهد محدد
                             const viewer = room.viewers.get(data.targetId);
                             if (viewer && viewer.readyState === 1) {
                                 viewer.send(JSON.stringify({
@@ -173,7 +170,6 @@ wss.on('connection', (ws, req) => {
                     if (rooms.has(data.roomId)) {
                         const room = rooms.get(data.roomId);
                         if (ws.role === 'broadcaster') {
-                            // إعلام المشاهدين
                             room.viewers.forEach(viewer => {
                                 if (viewer.readyState === 1) {
                                     viewer.send(JSON.stringify({
@@ -201,7 +197,6 @@ wss.on('connection', (ws, req) => {
             const room = rooms.get(ws.roomId);
             
             if (ws.role === 'broadcaster') {
-                // إعلام المشاهدين
                 room.viewers.forEach(viewer => {
                     if (viewer.readyState === 1) {
                         viewer.send(JSON.stringify({
@@ -214,7 +209,6 @@ wss.on('connection', (ws, req) => {
             } else if (ws.role === 'viewer' && ws.viewerId) {
                 room.viewers.delete(ws.viewerId);
                 
-                // إعلام المديع
                 if (room.broadcaster && room.broadcaster.readyState === 1) {
                     room.broadcaster.send(JSON.stringify({
                         type: 'viewer-left',
@@ -226,13 +220,6 @@ wss.on('connection', (ws, req) => {
         }
     });
 });
-
-setInterval(() => {
-    console.log(`📊 Active rooms: ${rooms.size}`);
-    rooms.forEach((room, roomId) => {
-        console.log(`   Room ${roomId}: ${room.viewers.size} viewers`);
-    });
-}, 30000);
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
