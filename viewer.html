@@ -1,134 +1,118 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>الطالب - مشاهدة البث</title>
+    <title>المشاهد</title>
     <style>
-        body { background: #1a1a2e; color: white; font-family: sans-serif; text-align: center; }
-        video { width: 80%; background: black; border-radius: 10px; margin-top: 20px; }
-        button { padding: 10px 20px; font-size: 18px; cursor: pointer; background: #2ec4b6; border: none; border-radius: 5px; }
+        body { font-family: Arial; padding: 20px; }
+        video { width: 100%; max-width: 600px; background: #000; }
+        button { padding: 10px 20px; margin: 5px; }
+        #status { padding: 10px; margin: 10px 0; }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mediasoup-client/3.6.85/mediasoup-client.min.js"></script>
 </head>
 <body>
-    <h1>👁️ مشاهدة الدرس</h1>
-    <button id="btnJoin">انضمام للبث</button>
-    <br>
+    <h1>👁️ المشاهد</h1>
+    
+    <div>
+        <input type="text" id="roomId" value="live1" placeholder="Room ID">
+        <button id="joinBtn">انضم للبث</button>
+    </div>
+    
+    <div id="status">أدخل معرف الغرفة</div>
+    
     <video id="remoteVideo" autoplay playsinline controls></video>
-    <div id="status"></div>
-
+    
     <script>
-        const ioClient = io;
-        const mediasoupClient = mediasoupClient;
+        const SERVER = 'wss://cripanyt.onrender.com';
+        let socket;
+        let peerConnection;
+        let roomId;
         
-        const socket = io("http://localhost:3000"); // ⚠️ غيّر هذا لرابط سيرفرك
+        document.getElementById('joinBtn').onclick = joinRoom;
         
-        let device;
-        let consumerTransport;
-        let videoConsumer;
-        let rtpCapabilities;
-
-        const btnJoin = document.getElementById('btnJoin');
-        
-        btnJoin.addEventListener('click', () => {
-            btnJoin.disabled = true;
-            joinRoom();
-        });
-
-        socket.on('connection-success', ({ socketId }) => {
-            console.log("Connected:", socketId);
-        });
-
-        // إذا بدأ المعلم البث ونحن متصلون
-        socket.on('new-producer', () => {
-            console.log("New producer available");
-            // يمكن إضافة منطق لإعادة الاتصال أو التحديث
-        });
-
-        async function joinRoom() {
-            socket.emit('getRouterRtpCapabilities', async (rtpCaps) => {
-                rtpCapabilities = rtpCaps;
-                device = new mediasoupClient.Device();
-                await device.load({ routerRtpCapabilities: rtpCapabilities });
-
-                createRecvTransport();
-            });
-        }
-
-        function createRecvTransport() {
-            socket.emit('createWebRtcTransport', { sender: false }, ({ params }) => {
-                if (params.error) {
-                    console.log(params.error);
-                    return;
-                }
-
-                consumerTransport = device.createRecvTransport(params);
-
-                consumerTransport.on('connect', async ({ dtlsParameters }, callback, errback) => {
-                    try {
-                        socket.emit('transport-recv-connect', {
-                            dtlsParameters,
-                            serverConsumerTransportId: params.id,
-                        });
-                        callback();
-                    } catch (error) {
-                        errback(error);
-                    }
-                });
-
-                connectRecvTransport();
-            });
-        }
-
-        async function connectRecvTransport() {
-            // البحث عن Producers موجودين
-            socket.emit('getProducers', (producerIds) => {
-                if(producerIds.length > 0) {
-                    // نفترض أن أول واحد هو الفيديو
-                    const remoteProducerId = producerIds[0]; 
-                    consumeStream(remoteProducerId);
-                    // إذا كان هناك صوت أيضاً، يجب عمل consume له (سيعود بـ ID آخر)
-                    if(producerIds.length > 1) consumeStream(producerIds[1]);
-                } else {
-                    document.getElementById('status').innerText = "في انتظار المعلم...";
-                }
-            });
-        }
-
-        async function consumeStream(remoteProducerId) {
-            socket.emit('consume', {
-                rtpCapabilities: device.rtpCapabilities,
-                remoteProducerId: remoteProducerId,
-                serverConsumerTransportId: consumerTransport.id,
-            }, async ({ params }) => {
-                if (params.error) {
-                    console.log('Cannot Consume');
-                    return;
-                }
-
-                const consumer = await consumerTransport.consume({
-                    id: params.id,
-                    producerId: params.producerId,
-                    kind: params.kind,
-                    rtpParameters: params.rtpParameters,
-                });
-
-                const { track } = consumer;
+        function joinRoom() {
+            roomId = document.getElementById('roomId').value;
+            if (!roomId) return alert('أدخل معرف الغرفة');
+            
+            document.getElementById('status').textContent = 'جاري الاتصال...';
+            document.getElementById('joinBtn').disabled = true;
+            
+            socket = new WebSocket(SERVER);
+            
+            socket.onopen = () => {
+                socket.send(JSON.stringify({
+                    type: 'join-room',
+                    roomId: roomId
+                }));
+            };
+            
+            socket.onmessage = async (event) => {
+                const data = JSON.parse(event.data);
                 
-                // إضافة التراك للفيديو
-                const remoteVideo = document.getElementById('remoteVideo');
-                let stream = remoteVideo.srcObject;
-                if (!stream) {
-                    stream = new MediaStream();
-                    remoteVideo.srcObject = stream;
+                if (data.type === 'room-joined') {
+                    document.getElementById('status').textContent = 'بانتظار البث...';
+                    console.log('✅ Joined room');
                 }
-                stream.addTrack(track);
-
-                // استئناف الاستقبال من السيرفر
-                socket.emit('consumer-resume', { serverConsumerId: params.id });
-                document.getElementById('status').innerText = "🟢 متصل";
+                else if (data.type === 'offer') {
+                    await handleOffer(data.sdp);
+                }
+                else if (data.type === 'ice-candidate') {
+                    if (peerConnection && peerConnection.remoteDescription) {
+                        await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                    }
+                }
+                else if (data.type === 'broadcast-ended') {
+                    document.getElementById('status').textContent = 'انتهى البث';
+                    if (peerConnection) peerConnection.close();
+                    document.getElementById('joinBtn').disabled = false;
+                }
+                else if (data.type === 'error') {
+                    alert(data.message);
+                    document.getElementById('joinBtn').disabled = false;
+                }
+            };
+            
+            socket.onclose = () => {
+                document.getElementById('status').textContent = 'انقطع الاتصال';
+                document.getElementById('joinBtn').disabled = false;
+            };
+        }
+        
+        async function handleOffer(sdp) {
+            if (peerConnection) peerConnection.close();
+            
+            peerConnection = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
             });
+            
+            // استقبال الفيديو
+            peerConnection.ontrack = (event) => {
+                if (document.getElementById('remoteVideo').srcObject !== event.streams[0]) {
+                    document.getElementById('remoteVideo').srcObject = event.streams[0];
+                    document.getElementById('status').textContent = 'يشاهد البث الآن';
+                }
+            };
+            
+            // إرسال ICE candidates
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate && socket.readyState === 1) {
+                    socket.send(JSON.stringify({
+                        type: 'ice-candidate',
+                        candidate: event.candidate,
+                        roomId: roomId
+                    }));
+                }
+            };
+            
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+            
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            
+            socket.send(JSON.stringify({
+                type: 'answer',
+                sdp: answer,
+                roomId: roomId
+            }));
         }
     </script>
 </body>
