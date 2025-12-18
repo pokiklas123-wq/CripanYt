@@ -2,32 +2,18 @@ const WebSocket = require('ws');
 const http = require('http');
 
 const server = http.createServer((req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    
-    if (req.method === 'OPTIONS') {
-        res.writeHead(204);
-        res.end();
-        return;
-    }
-    
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('✅ WebRTC Signaling Server is LIVE');
 });
 
 const wss = new WebSocket.Server({ server });
-const rooms = new Map();
+const rooms = new Map(); // Map<RoomID, Set<WebSocket>>
 
 console.log('🚀 Starting WebRTC Signaling Server...');
 
 wss.on('connection', (ws) => {
-    console.log('✅ New client connected');
-
-    ws.send(JSON.stringify({
-        type: 'welcome',
-        message: 'Connected to signaling server'
-    }));
+    ws.id = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    console.log(`✅ Client connected: ${ws.id}`);
 
     ws.on('message', (message) => {
         try {
@@ -39,83 +25,67 @@ wss.on('connection', (ws) => {
                         rooms.set(data.roomId, new Set());
                     }
                     rooms.get(data.roomId).add(ws);
+                    ws.roomId = data.roomId;
+                    ws.isBroadcaster = true;
                     
-                    ws.send(JSON.stringify({
-                        type: 'room-created',
-                        roomId: data.roomId
-                    }));
-                    
-                    console.log(`✅ Room created: ${data.roomId}`);
+                    ws.send(JSON.stringify({ type: 'room-created', roomId: data.roomId }));
+                    console.log(`🎥 Room created: ${data.roomId}`);
                     break;
 
                 case 'join-room':
                     if (rooms.has(data.roomId)) {
                         rooms.get(data.roomId).add(ws);
+                        ws.roomId = data.roomId;
                         
-                        ws.send(JSON.stringify({
-                            type: 'room-joined',
-                            roomId: data.roomId
-                        }));
+                        ws.send(JSON.stringify({ type: 'room-joined', roomId: data.roomId }));
                         
-                        // إعلام المديع بمشاهد جديد
+                        // إبلاغ المذيع بوجود مشاهد جديد
                         rooms.get(data.roomId).forEach(client => {
-                            if (client !== ws && client.readyState === 1) {
+                            if (client !== ws && client.isBroadcaster) {
                                 client.send(JSON.stringify({
                                     type: 'new-viewer',
-                                    viewerId: data.viewerId || 'anonymous'
+                                    viewerId: ws.id // نستخدم ID السوكيت لضمان الدقة
                                 }));
                             }
                         });
-                        
                         console.log(`👤 Viewer joined: ${data.roomId}`);
                     } else {
-                        ws.send(JSON.stringify({
-                            type: 'error',
-                            message: 'Room not found. Make sure broadcaster has started the stream.'
-                        }));
+                        ws.send(JSON.stringify({ type: 'error', message: 'الغرفة غير موجودة أو لم يبدأ البث بعد' }));
                     }
                     break;
 
                 case 'offer':
                 case 'answer':
                 case 'ice-candidate':
-                    // إعادة توجيه الرسائل
-                    const room = Array.from(rooms.entries()).find(([roomId, clients]) => 
-                        clients.has(ws)
-                    );
-                    
-                    if (room) {
-                        const [roomId, clients] = room;
-                        clients.forEach(client => {
-                            if (client !== ws && client.readyState === 1) {
+                    // توجيه الرسالة للشخص المحدد فقط (Targeted Signaling)
+                    if (rooms.has(data.roomId)) {
+                        rooms.get(data.roomId).forEach(client => {
+                            // إذا كان هناك targetId، أرسل له فقط. وإلا أرسل للطرف الآخر
+                            const shouldSend = data.targetId ? client.id === data.targetId : client !== ws;
+                            
+                            if (shouldSend && client.readyState === WebSocket.OPEN) {
+                                // نضيف senderId ليعرف المستقبل من أين جاءت الرسالة
+                                data.senderId = ws.id;
                                 client.send(JSON.stringify(data));
                             }
                         });
                     }
                     break;
-
-                case 'leave-room':
-                    rooms.forEach((clients, roomId) => {
-                        clients.delete(ws);
-                        if (clients.size === 0) {
-                            rooms.delete(roomId);
-                        }
-                    });
-                    break;
             }
         } catch (error) {
-            console.error('❌ Error:', error);
+            console.error('❌ Error parsing message:', error);
         }
     });
 
     ws.on('close', () => {
-        console.log('🔌 Client disconnected');
-        rooms.forEach((clients, roomId) => {
-            clients.delete(ws);
-            if (clients.size === 0) {
-                rooms.delete(roomId);
+        if (ws.roomId && rooms.has(ws.roomId)) {
+            rooms.get(ws.roomId).delete(ws);
+            if (rooms.get(ws.roomId).size === 0) {
+                rooms.delete(ws.roomId);
+                console.log(`🗑 Room deleted: ${ws.roomId}`);
             }
-        });
+        }
+        console.log(`🔌 Client disconnected: ${ws.id}`);
     });
 });
 
