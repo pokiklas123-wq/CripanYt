@@ -2,7 +2,7 @@ const WebSocket = require('ws');
 const http = require('http');
 
 const server = http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.writeHead(200, { 'Content-Type': 'text/plain', 'Content-Type': 'text/html; charset=utf-8' });
     res.end('✅ WebRTC SFU Server - يدعم 100 مشاهد');
 });
 
@@ -27,8 +27,9 @@ wss.on('connection', (ws, req) => {
                             viewers: new Map(),
                             mediaInfo: null
                         });
+                    } else {
+                        rooms.get(data.roomId).broadcaster = ws;
                     }
-                    rooms.get(data.roomId).broadcaster = ws;
                     ws.roomId = data.roomId;
                     ws.role = 'broadcaster';
                     
@@ -65,6 +66,22 @@ wss.on('connection', (ws, req) => {
                             totalViewers: room.viewers.size 
                         }));
                         
+                        // ✅ إرسال البث الحالي للمشاهد الجديد فوراً
+                        if (room.mediaInfo) {
+                            setTimeout(() => {
+                                if (ws.readyState === 1) {
+                                    ws.send(JSON.stringify({
+                                        type: 'media-stream',
+                                        roomId: data.roomId,
+                                        sdp: room.mediaInfo.sdp,
+                                        mediaType: room.mediaInfo.type,
+                                        senderId: 'broadcaster'
+                                    }));
+                                    console.log(`📡 Sent existing stream to new viewer: ${viewerId}`);
+                                }
+                            }, 500);
+                        }
+                        
                         // إعلام المديع
                         if (room.broadcaster && room.broadcaster.readyState === 1) {
                             room.broadcaster.send(JSON.stringify({
@@ -87,12 +104,14 @@ wss.on('connection', (ws, req) => {
                     if (rooms.has(data.roomId)) {
                         const room = rooms.get(data.roomId);
                         if (room.broadcaster === ws) {
+                            // ✅ تخزين معلومات البث
                             room.mediaInfo = {
                                 sdp: data.sdp,
-                                type: data.mediaType || 'video'
+                                type: data.mediaType || 'video',
+                                timestamp: Date.now()
                             };
                             
-                            // إرسال لجميع المشاهدين (SFU)
+                            // ✅ إرسال لجميع المشاهدين الموجودين
                             room.viewers.forEach((viewer, viewerId) => {
                                 if (viewer.readyState === 1) {
                                     viewer.send(JSON.stringify({
@@ -100,7 +119,7 @@ wss.on('connection', (ws, req) => {
                                         roomId: data.roomId,
                                         sdp: data.sdp,
                                         mediaType: data.mediaType || 'video',
-                                        viewerId: viewerId
+                                        senderId: 'broadcaster'
                                     }));
                                 }
                             });
@@ -110,25 +129,42 @@ wss.on('connection', (ws, req) => {
                     }
                     break;
 
-                case 'offer':
                 case 'answer':
+                    if (rooms.has(data.roomId)) {
+                        const room = rooms.get(data.roomId);
+                        // إرسال الإجابة للمذيع فقط
+                        if (room.broadcaster && room.broadcaster.readyState === 1) {
+                            room.broadcaster.send(JSON.stringify({
+                                type: 'answer',
+                                answer: data.answer,
+                                viewerId: data.viewerId || ws.viewerId
+                            }));
+                        }
+                    }
+                    break;
+
                 case 'ice-candidate':
                     if (rooms.has(data.roomId)) {
                         const room = rooms.get(data.roomId);
-                        
-                        // توجيه الرسالة للشخص المحدد فقط
-                        room.viewers.forEach((viewer, viewerId) => {
-                            if (data.targetId && viewerId === data.targetId && viewer.readyState === 1) {
-                                data.senderId = ws.id;
-                                viewer.send(JSON.stringify(data));
+                        if (data.targetId === 'broadcaster') {
+                            // إرسال إلى المذيع
+                            if (room.broadcaster && room.broadcaster.readyState === 1) {
+                                room.broadcaster.send(JSON.stringify({
+                                    type: 'ice-candidate',
+                                    candidate: data.candidate,
+                                    senderId: ws.viewerId || ws.id
+                                }));
                             }
-                        });
-                        
-                        // أو للمديع
-                        if (room.broadcaster && room.broadcaster.readyState === 1 && 
-                            (!data.targetId || room.broadcaster.id === data.targetId)) {
-                            data.senderId = ws.id;
-                            room.broadcaster.send(JSON.stringify(data));
+                        } else {
+                            // إرسال إلى مشاهد محدد
+                            const viewer = room.viewers.get(data.targetId);
+                            if (viewer && viewer.readyState === 1) {
+                                viewer.send(JSON.stringify({
+                                    type: 'ice-candidate',
+                                    candidate: data.candidate,
+                                    senderId: ws.id
+                                }));
+                            }
                         }
                     }
                     break;
@@ -175,7 +211,7 @@ wss.on('connection', (ws, req) => {
                     }
                 });
                 rooms.delete(ws.roomId);
-            } else if (ws.role === 'viewer') {
+            } else if (ws.role === 'viewer' && ws.viewerId) {
                 room.viewers.delete(ws.viewerId);
                 
                 // إعلام المديع
@@ -193,6 +229,9 @@ wss.on('connection', (ws, req) => {
 
 setInterval(() => {
     console.log(`📊 Active rooms: ${rooms.size}`);
+    rooms.forEach((room, roomId) => {
+        console.log(`   Room ${roomId}: ${room.viewers.size} viewers`);
+    });
 }, 30000);
 
 const PORT = process.env.PORT || 10000;
