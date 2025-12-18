@@ -3,48 +3,389 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>المشاهد - مشاهدة البث المباشر</title>
+    <title>👁️ المشاهد - مشاهدة البث المباشر</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #fff; min-height: 100vh; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        header { text-align: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 2px solid #f59e0b; }
-        h1 { color: #f59e0b; font-size: 2.2rem; margin-bottom: 10px; }
-        .subtitle { color: #cbd5e1; font-size: 1.1rem; }
+        :root {
+            --primary: #7209b7;
+            --success: #4cc9f0;
+            --warning: #f8961e;
+            --dark: #10002b;
+            --light: #f8f9fa;
+            --gray: #6c757d;
+        }
         
-        .main-content { display: flex; flex-wrap: wrap; gap: 30px; }
-        .join-panel { flex: 1; min-width: 300px; background: rgba(255, 255, 255, 0.05); padding: 25px; border-radius: 15px; border: 1px solid #475569; }
-        .video-container { flex: 2; min-width: 300px; background: #000; border-radius: 15px; overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7); position: relative; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Cairo', Tahoma, sans-serif;
+        }
         
-        .input-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; color: #cbd5e1; font-weight: 500; }
-        input { width: 100%; padding: 12px 15px; background: rgba(255, 255, 255, 0.1); border: 1px solid #475569; border-radius: 8px; color: white; font-size: 1rem; }
-        input:focus { outline: none; border-color: #f59e0b; }
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: var(--light);
+            min-height: 100vh;
+            padding: 20px;
+            line-height: 1.6;
+        }
         
-        .buttons { display: flex; gap: 12px; margin-top: 25px; }
-        button { flex: 1; padding: 15px; border: none; border-radius: 8px; font-weight: 600; font-size: 1rem; cursor: pointer; transition: all 0.3s ease; }
-        #joinBtn { background: linear-gradient(to right, #f59e0b, #fbbf24); color: #1e293b; }
-        #leaveBtn { background: rgba(255, 255, 255, 0.1); color: white; border: 1px solid #475569; }
-        button:hover { transform: translateY(-2px); }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
         
-        .status { padding: 15px; border-radius: 8px; margin-top: 20px; text-align: center; }
-        .status.connecting { background: rgba(245, 158, 11, 0.1); color: #fbbf24; }
-        .status.connected { background: rgba(34, 197, 94, 0.1); color: #4ade80; }
-        .status.disconnected { background: rgba(239, 68, 68, 0.1); color: #f87171; }
+        header {
+            text-align: center;
+            padding: 25px 0;
+            margin-bottom: 30px;
+            border-bottom: 3px solid var(--primary);
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
         
-        video { width: 100%; height: auto; max-height: 600px; display: block; }
-        .video-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0, 0, 0, 0.7); z-index: 10; }
-        .video-overlay.hidden { display: none; }
-        .overlay-icon { font-size: 4rem; margin-bottom: 20px; color: #f59e0b; }
+        h1 {
+            color: #fff;
+            font-size: 2.8rem;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #7209b7, #4361ee);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 5px 15px rgba(114, 9, 183, 0.3);
+        }
         
-        .info-box { background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 8px; padding: 15px; margin-top: 20px; }
+        .subtitle {
+            color: #a1cae2;
+            font-size: 1.2rem;
+            max-width: 800px;
+            margin: 0 auto;
+        }
         
-        footer { text-align: center; margin-top: 40px; color: #cbd5e1; font-size: 0.9rem; }
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
         
-        @media (max-width: 768px) {
-            .main-content { flex-direction: column; }
-            .join-panel, .video-container { width: 100%; }
+        @media (max-width: 1024px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .join-panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid rgba(114, 9, 183, 0.2);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+        
+        .section-title {
+            color: #4cc9f0;
+            font-size: 1.5rem;
+            margin-bottom: 25px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid rgba(76, 201, 240, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .input-group {
+            margin-bottom: 25px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 10px;
+            color: #a1cae2;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        
+        input {
+            width: 100%;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 2px solid rgba(114, 9, 183, 0.3);
+            border-radius: 12px;
+            color: white;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(114, 9, 183, 0.2);
+            background: rgba(255, 255, 255, 0.12);
+        }
+        
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 30px 0;
+        }
+        
+        .btn {
+            padding: 18px 25px;
+            border: none;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #7209b7 0%, #4361ee 100%);
+            color: white;
+        }
+        
+        .btn-warning {
+            background: linear-gradient(135deg, #f8961e 0%, #f3722c 100%);
+            color: white;
+        }
+        
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .video-container {
+            background: #000;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            position: relative;
+            min-height: 500px;
+        }
+        
+        video {
+            width: 100%;
+            height: auto;
+            max-height: 700px;
+            display: block;
+            background: #111;
+        }
+        
+        .video-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            text-align: center;
+            padding: 30px;
+            z-index: 10;
+        }
+        
+        .overlay-icon {
+            font-size: 5rem;
+            margin-bottom: 20px;
+            color: #7209b7;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        .status-indicator {
+            padding: 15px 25px;
+            border-radius: 12px;
+            margin: 20px 0;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .status-connected {
+            background: rgba(76, 201, 240, 0.15);
+            color: #4cc9f0;
+            border: 2px solid rgba(76, 201, 240, 0.3);
+        }
+        
+        .status-disconnected {
+            background: rgba(248, 150, 30, 0.15);
+            color: #f8961e;
+            border: 2px solid rgba(248, 150, 30, 0.3);
+        }
+        
+        .status-connecting {
+            background: rgba(114, 9, 183, 0.15);
+            color: #7209b7;
+            border: 2px solid rgba(114, 9, 183, 0.3);
+        }
+        
+        .info-box {
+            background: rgba(114, 9, 183, 0.1);
+            border: 1px solid rgba(114, 9, 183, 0.3);
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 25px;
+        }
+        
+        .info-box h3 {
+            color: #a1cae2;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .info-box ol {
+            padding-right: 20px;
+            line-height: 1.8;
+        }
+        
+        .info-box li {
+            margin-bottom: 10px;
+            color: #cbd5e1;
+        }
+        
+        .stats-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 20;
+        }
+        
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: white;
+        }
+        
+        .stat-value {
+            font-weight: 700;
+            color: #4cc9f0;
+        }
+        
+        .controls-bar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 20;
+        }
+        
+        .control-btn {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 10px 15px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .control-btn:hover {
+            background: rgba(114, 9, 183, 0.6);
+            transform: translateY(-2px);
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            background: var(--primary);
+            color: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            display: none;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .quality-selector {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .quality-btn {
+            flex: 1;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: #a1cae2;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .quality-btn.active {
+            background: rgba(114, 9, 183, 0.3);
+            border-color: #7209b7;
+            color: white;
+        }
+        
+        .quality-btn:hover {
+            background: rgba(114, 9, 183, 0.2);
         }
     </style>
 </head>
@@ -52,303 +393,479 @@
     <div class="container">
         <header>
             <h1>👁️ مشاهدة البث المباشر</h1>
-            <p class="subtitle">شاهد البث المباشر في الوقت الحقيقي</p>
+            <p class="subtitle">شاهد البث المباشر في الوقت الحقيقي مع تأخير أقل من نصف ثانية</p>
         </header>
         
         <div class="main-content">
             <div class="join-panel">
-                <h2 style="margin-bottom: 20px; color: #cbd5e1;">🔗 الانضمام للبث</h2>
+                <div class="section-title">
+                    <span>🔗 الانضمام للبث</span>
+                </div>
                 
                 <div class="input-group">
                     <label for="viewerRoomId">🔑 معرف البث (Room ID)</label>
                     <input type="text" id="viewerRoomId" placeholder="أدخل معرف البث الذي أعطاك إياه المديع">
+                    <small style="color: #6c757d; display: block; margin-top: 8px;">انسخ المعرف من رابط المديع أو أدخله يدوياً</small>
                 </div>
                 
-                <div class="buttons">
-                    <button id="joinBtn">🚀 انضم للبث</button>
-                    <button id="leaveBtn" disabled>👋 مغادرة البث</button>
+                <div class="quality-selector">
+                    <div class="quality-btn active" data-quality="auto">تلقائي</div>
+                    <div class="quality-btn" data-quality="720p">720p</div>
+                    <div class="quality-btn" data-quality="480p">480p</div>
                 </div>
                 
-                <div class="status disconnected" id="status">
-                    ⚪ لم تنضم بعد - أدخل معرف البث واضغط "انضم للبث"
+                <div class="button-group">
+                    <button id="joinBtn" class="btn btn-primary">
+                        <span>🚀</span>
+                        <span>انضم للبث</span>
+                    </button>
+                    <button id="leaveBtn" class="btn btn-warning" disabled>
+                        <span>👋</span>
+                        <span>مغادرة البث</span>
+                    </button>
+                </div>
+                
+                <div id="status" class="status-indicator status-disconnected">
+                    <span>🔴</span>
+                    <span>لم تنضم بعد - أدخل معرف البث واضغط "انضم للبث"</span>
                 </div>
                 
                 <div class="info-box">
-                    <h3 style="color: #fbbf24; margin-bottom: 10px;">💡 كيف تشاهد:</h3>
-                    <ol style="padding-right: 20px; line-height: 1.6;">
-                        <li>انسخ معرف البث من المديع</li>
+                    <h3>
+                        <span>💡</span>
+                        <span>كيفية المشاهدة:</span>
+                    </h3>
+                    <ol>
+                        <li>انسخ معرف البث من المديع (مثل: my-live-123)</li>
                         <li>أدخل المعرف في الحقل أعلاه</li>
                         <li>اضغط "انضم للبث"</li>
-                        <li>انتظر اتصال البث (قد يستغرق بضع ثوان)</li>
+                        <li>انتظر اتصال البث (قد يستغرق 2-5 ثواني)</li>
+                        <li>استمتع بالمشاهدة في الوقت الحقيقي!</li>
                     </ol>
                 </div>
             </div>
             
             <div class="video-container">
-                <div class="video-overlay" id="videoOverlay">
+                <div id="videoOverlay" class="video-overlay">
                     <div class="overlay-icon">📺</div>
-                    <h2 style="color: white; margin-bottom: 10px;">في انتظار البث</h2>
-                    <p style="color: #cbd5e1; text-align: center; max-width: 80%;">بمجرد الانضمام للبث، سيظهر هنا الفيديو المباشر من المديع</p>
+                    <h2 style="margin-bottom: 15px; font-size: 2rem;">في انتظار البث</h2>
+                    <p style="color: #a1cae2; max-width: 500px; margin-bottom: 25px;">
+                        أدخل معرف البث في اللوحة الجانبية وانضم لمشاهدة البث المباشر
+                    </p>
+                    <div style="color: #6c757d; font-size: 0.9rem;">
+                        ⚡ تأخير أقل من 500ms باستخدام تقنية WebRTC
+                    </div>
                 </div>
+                
+                <div class="controls-bar" id="controlsBar" style="display: none;">
+                    <div class="control-btn" id="fullscreenBtn">
+                        <span>⛶</span>
+                        <span>ملء الشاشة</span>
+                    </div>
+                    <div class="control-btn" id="volumeBtn">
+                        <span>🔊</span>
+                        <span>الصوت</span>
+                    </div>
+                </div>
+                
+                <div class="stats-bar" id="statsBar" style="display: none;">
+                    <div class="stat-item">
+                        <span>📡</span>
+                        <span>حالة:</span>
+                        <span id="streamStatus" class="stat-value">--</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>⏱️</span>
+                        <span>المدة:</span>
+                        <span id="watchTime" class="stat-value">00:00</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>🎥</span>
+                        <span>المديع:</span>
+                        <span id="broadcasterId" class="stat-value">--</span>
+                    </div>
+                </div>
+                
                 <video id="remoteVideo" autoplay playsinline></video>
             </div>
         </div>
         
+        <div class="toast" id="toast"></div>
+        
         <footer>
-            <p>© 2025 منصة البث المباشر | تجربة مشاهدة في الوقت الحقيقي</p>
-            <p style="font-size: 0.8rem; margin-top: 5px;">التأخير أقل من 500 مللي ثانية باستخدام WebRTC</p>
+            <p>© 2025 منصة البث المباشر | تجربة مشاهدة في الوقت الحقيقي | السيرفر: cripanyt.onrender.com</p>
+            <p style="font-size: 0.8rem; margin-top: 8px; color: #6c757d;">
+                يدعم الهواتف والأجهزة اللوحية والحواسيب | لا حاجة لتثبيت أي برنامج
+            </p>
         </footer>
     </div>
 
     <script>
-        // العناصر الأساسية
+        // Configuration
+        const CONFIG = {
+            SIGNALING_SERVER: 'wss://cripanyt.onrender.com',
+            STUN_SERVERS: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' }
+            ],
+            RECONNECT_DELAYS: [1000, 2000, 5000, 10000, 15000],
+            CONNECTION_TIMEOUT: 10000
+        };
+
+        // DOM Elements
         const viewerRoomId = document.getElementById('viewerRoomId');
         const joinBtn = document.getElementById('joinBtn');
         const leaveBtn = document.getElementById('leaveBtn');
         const statusDiv = document.getElementById('status');
         const remoteVideo = document.getElementById('remoteVideo');
         const videoOverlay = document.getElementById('videoOverlay');
-        
-        // المتغيرات
-        let peerConnection = null;
-        let socket = null;
-        let currentRoomId = '';
-        
-        // إعدادات ICE[citation:2][citation:10]
-        const configuration = {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' }
-            ]
+        const controlsBar = document.getElementById('controlsBar');
+        const statsBar = document.getElementById('statsBar');
+        const streamStatus = document.getElementById('streamStatus');
+        const watchTime = document.getElementById('watchTime');
+        const broadcasterId = document.getElementById('broadcasterId');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const volumeBtn = document.getElementById('volumeBtn');
+        const qualityBtns = document.querySelectorAll('.quality-btn');
+        const toast = document.getElementById('toast');
+
+        // Application State
+        let state = {
+            socket: null,
+            peerConnection: null,
+            currentRoomId: '',
+            isConnected: false,
+            reconnectAttempt: 0,
+            watchStartTime: null,
+            watchInterval: null,
+            streamQuality: 'auto',
+            volume: 1,
+            isFullscreen: false,
+            connectionTimeout: null
         };
-        
-        // استبدل هذا بعنوان سيرفر الإشارة الفعلي
-        const SIGNALING_SERVER = 'wss://cripanyt.onrender.co'; // أو 'ws://localhost:8080' للتجربة المحلية
-        
-        // محاولة الحصول على معرف الغرفة من رابط URL
+
+        // Show toast message
+        function showToast(message, type = 'info') {
+            toast.textContent = message;
+            toast.style.background = type === 'success' ? '#4cc9f0' : 
+                                  type === 'error' ? '#f8961e' : '#7209b7';
+            toast.style.display = 'block';
+            
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 3000);
+        }
+
+        // Update status display
+        function updateStatus(message, type = 'disconnected') {
+            const icons = {
+                connected: '🟢',
+                connecting: '🟡',
+                disconnected: '🔴'
+            };
+            
+            statusDiv.innerHTML = `<span>${icons[type] || '⚪'}</span><span>${message}</span>`;
+            statusDiv.className = `status-indicator status-${type}`;
+            streamStatus.textContent = type === 'connected' ? 'مباشر' : 
+                                     type === 'connecting' ? 'جاري الاتصال' : 'متوقف';
+        }
+
+        // Get room ID from URL parameters
         function getRoomFromURL() {
             const urlParams = new URLSearchParams(window.location.search);
             const roomParam = urlParams.get('room');
+            
             if (roomParam) {
                 viewerRoomId.value = decodeURIComponent(roomParam);
-                // الانضمام تلقائياً إذا كان المعرف في الرابط
+                showToast('📋 تم تحميل معرف البث تلقائياً من الرابط');
+                
+                // Auto-join after a short delay
                 setTimeout(() => {
-                    joinBtn.click();
-                }, 500);
-            }
-        }
-        
-        // الانضمام إلى البث
-        joinBtn.addEventListener('click', async () => {
-            currentRoomId = viewerRoomId.value.trim();
-            if (!currentRoomId) {
-                alert('يرجى إدخال معرف البث');
-                return;
-            }
-            
-            try {
-                statusDiv.textContent = '⏳ جاري الاتصال بالبث...';
-                statusDiv.className = 'status connecting';
-                videoOverlay.innerHTML = '<div class="overlay-icon">⏳</div><h2 style="color: white; margin-bottom: 10px;">جاري الاتصال...</h2>';
-                videoOverlay.classList.remove('hidden');
-                
-                // 1. الاتصال بسيرفر الإشارة
-                connectSignaling();
-                
-                // 2. إنشاء اتصال WebRTC
-                createPeerConnection();
-                
-                // 3. إرسال طلب الانضمام إلى الغرفة
-                setTimeout(() => {
-                    if (socket && socket.readyState === WebSocket.OPEN) {
-                        socket.send(JSON.stringify({
-                            type: 'join-room',
-                            roomId: currentRoomId,
-                            viewerId: `viewer-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
-                        }));
-                    }
-                }, 500);
-                
-                // 4. إنشاء عرض (offer) وإرساله للمديع
-                setTimeout(async () => {
-                    try {
-                        const offer = await peerConnection.createOffer();
-                        await peerConnection.setLocalDescription(offer);
-                        
-                        if (socket && socket.readyState === WebSocket.OPEN) {
-                            socket.send(JSON.stringify({
-                                type: 'offer',
-                                offer: offer,
-                                roomId: currentRoomId
-                            }));
-                        }
-                    } catch (error) {
-                        console.error('خطأ في إنشاء العرض:', error);
+                    if (!state.isConnected) {
+                        joinBtn.click();
                     }
                 }, 1000);
+            }
+        }
+
+        // Join the broadcast
+        async function joinBroadcast() {
+            try {
+                state.currentRoomId = viewerRoomId.value.trim();
                 
-                // 5. تحديث واجهة المستخدم
+                if (!state.currentRoomId) {
+                    showToast('❌ يرجى إدخال معرف البث', 'error');
+                    return;
+                }
+
+                updateStatus('جاري الاتصال بالبث...', 'connecting');
                 joinBtn.disabled = true;
-                leaveBtn.disabled = false;
-                viewerRoomId.disabled = true;
-                
-                console.log('انضم للبث بنجاح في الغرفة:', currentRoomId);
-                
+                joinBtn.innerHTML = '<span class="loading"></span><span>جاري الاتصال...</span>';
+
+                // Start connection timeout
+                state.connectionTimeout = setTimeout(() => {
+                    if (!state.isConnected) {
+                        showToast('❌ انتهى وقت الانتظار. تحقق من معرف البث.', 'error');
+                        updateStatus('فشل الاتصال', 'disconnected');
+                        resetConnection();
+                    }
+                }, CONFIG.CONNECTION_TIMEOUT);
+
+                // Connect to signaling server
+                await connectToSignalingServer();
+
+                // Create WebRTC peer connection
+                await createPeerConnection();
+
+                // Send join request
+                const viewerId = `viewer_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+                state.socket.send(JSON.stringify({
+                    type: 'join-room',
+                    roomId: state.currentRoomId,
+                    viewerId: viewerId,
+                    timestamp: Date.now(),
+                    quality: state.streamQuality
+                }));
+
+                // Show connecting overlay
+                videoOverlay.innerHTML = `
+                    <div class="overlay-icon">⏳</div>
+                    <h2 style="margin-bottom: 15px; font-size: 2rem;">جاري الاتصال...</h2>
+                    <p style="color: #a1cae2; max-width: 500px;">
+                        الاتصال بالغرفة: <strong>${state.currentRoomId}</strong>
+                    </p>
+                    <p style="color: #6c757d; margin-top: 10px;">
+                        قد يستغرق هذا بضع ثواني
+                    </p>
+                `;
+
             } catch (error) {
-                console.error('خطأ في الانضمام للبث:', error);
-                statusDiv.textContent = '🔴 فشل الاتصال بالبث';
-                statusDiv.className = 'status disconnected';
+                console.error('Error joining broadcast:', error);
+                showToast(`❌ فشل الاتصال: ${error.message}`, 'error');
+                updateStatus('فشل الاتصال', 'disconnected');
                 resetConnection();
             }
-        });
-        
-        // مغادرة البث
-        leaveBtn.addEventListener('click', () => {
-            resetConnection();
-            statusDiv.textContent = '⚪ غادرت البث - يمكنك الانضمام لبث آخر';
-            statusDiv.className = 'status disconnected';
-            
-            videoOverlay.innerHTML = '<div class="overlay-icon">📺</div><h2 style="color: white; margin-bottom: 10px;">في انتظار البث</h2><p style="color: #cbd5e1;">غادرت البث. يمكنك الانضمام لبث جديد</p>';
-            videoOverlay.classList.remove('hidden');
-            
-            console.log('غادرت البث');
-        });
-        
-        // وظيفة الاتصال بسيرفر الإشارة
-        function connectSignaling() {
-            socket = new WebSocket(SIGNALING_SERVER);
-            
-            socket.onopen = () => {
-                console.log('✅ متصل بسيرفر الإشارة كمشاهد');
-            };
-            
-            socket.onmessage = async (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    console.log('📩 رسالة من السيرفر:', data);
-                    
-                    switch (data.type) {
-                        case 'room-joined':
-                            console.log('✅ انضممت للغرفة:', data.roomId);
-                            statusDiv.textContent = `🟢 متصل بالبث - معرف الغرفة: ${data.roomId}`;
-                            statusDiv.className = 'status connected';
-                            break;
-                            
-                        case 'answer':
-                            // المشاهد يتلقى إجابة من المديع
-                            if (peerConnection && data.answer) {
-                                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-                            }
-                            break;
-                            
-                        case 'ice-candidate':
-                            // معالجة مرشح ICE
-                            if (peerConnection && data.candidate) {
-                                try {
-                                    await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-                                } catch (e) {
-                                    console.error('خطأ في إضافة مرشح ICE:', e);
-                                }
-                            }
-                            break;
-                            
-                        case 'error':
-                            alert(`خطأ: ${data.message}`);
-                            resetConnection();
-                            break;
-                    }
-                } catch (error) {
-                    console.error('خطأ في معالجة رسالة السيرفر:', error);
-                }
-            };
-            
-            socket.onerror = (error) => {
-                console.error('❌ خطأ في اتصال WebSocket:', error);
-                statusDiv.textContent = '🔴 فشل الاتصال بالسيرفر';
-                statusDiv.className = 'status disconnected';
-            };
-            
-            socket.onclose = () => {
-                console.log('🔌 انقطع الاتصال بالسيرفر');
-                if (statusDiv.className.includes('connected')) {
-                    statusDiv.textContent = '🔴 انقطع الاتصال - حاول الانضمام مرة أخرى';
-                    statusDiv.className = 'status disconnected';
-                }
-            };
         }
-        
-        // وظيفة إنشاء اتصال WebRTC
-        function createPeerConnection() {
-            peerConnection = new RTCPeerConnection(configuration);
-            
-            // معالجة مرشحات ICE
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate && socket && socket.readyState === WebSocket.OPEN) {
-                    socket.send(JSON.stringify({
-                        type: 'ice-candidate',
-                        candidate: event.candidate,
-                        roomId: currentRoomId
-                    }));
-                }
-            };
-            
-            // معالجة تيار الوسائط الوارد من المديع
-            peerConnection.ontrack = (event) => {
-                console.log('📹 تلقيت تيار وسائط من المديع:', event.track.kind);
-                if (remoteVideo.srcObject !== event.streams[0]) {
-                    remoteVideo.srcObject = event.streams[0];
-                    videoOverlay.classList.add('hidden');
-                    statusDiv.textContent = `🎥 تشاهد بثاً مباشراً - ${currentRoomId}`;
-                    
-                    // تحديث رسالة الترحيب
-                    videoOverlay.innerHTML = '<div class="overlay-icon">✅</div><h2 style="color: white; margin-bottom: 10px;">البث يعمل!</h2>';
-                    setTimeout(() => {
-                        videoOverlay.classList.add('hidden');
-                    }, 2000);
-                }
-            };
-            
-            peerConnection.onconnectionstatechange = () => {
-                console.log('حالة الاتصال:', peerConnection.connectionState);
-                if (peerConnection.connectionState === 'connected') {
-                    console.log('✅ اتصال WebRTC ناجح!');
-                }
-            };
-            
-            peerConnection.oniceconnectionstatechange = () => {
-                console.log('حالة ICE:', peerConnection.iceConnectionState);
-                if (peerConnection.iceConnectionState === 'failed') {
-                    console.error('❌ فشل اتصال ICE');
-                    statusDiv.textContent = '🔴 فشل الاتصال بالبث - حاول مرة أخرى';
-                    statusDiv.className = 'status disconnected';
-                }
-            };
-        }
-        
-        // وظيفة إعادة تعيين الاتصال
-        function resetConnection() {
-            if (peerConnection) {
-                peerConnection.close();
-                peerConnection = null;
+
+        // Leave the broadcast
+        function leaveBroadcast() {
+            if (state.peerConnection) {
+                state.peerConnection.close();
+                state.peerConnection = null;
             }
-            
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({
+
+            if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+                state.socket.send(JSON.stringify({
                     type: 'leave-room',
-                    roomId: currentRoomId
+                    roomId: state.currentRoomId,
+                    timestamp: Date.now()
                 }));
-                socket.close();
+                state.socket.close();
             }
+
+            if (state.watchInterval) {
+                clearInterval(state.watchInterval);
+                state.watchInterval = null;
+            }
+
+            if (state.connectionTimeout) {
+                clearTimeout(state.connectionTimeout);
+                state.connectionTimeout = null;
+            }
+
+            // Reset state
+            state = {
+                socket: null,
+                peerConnection: null,
+                currentRoomId: '',
+                isConnected: false,
+                reconnectAttempt: 0,
+                watchStartTime: null,
+                watchInterval: null,
+                streamQuality: state.streamQuality,
+                volume: state.volume,
+                isFullscreen: state.isFullscreen,
+                connectionTimeout: null
+            };
+
+            // Reset UI
+            resetUI();
             
             remoteVideo.srcObject = null;
-            joinBtn.disabled = false;
-            leaveBtn.disabled = true;
-            viewerRoomId.disabled = false;
+            videoOverlay.style.display = 'flex';
+            videoOverlay.innerHTML = `
+                <div class="overlay-icon">📺</div>
+                <h2 style="margin-bottom: 15px; font-size: 2rem;">في انتظار البث</h2>
+                <p style="color: #a1cae2; max-width: 500px; margin-bottom: 25px;">
+                    أدخل معرف البث في اللوحة الجانبية وانضم لمشاهدة البث المباشر
+                </p>
+            `;
+            
+            updateStatus('غادرت البث', 'disconnected');
+            showToast('👋 غادرت البث المباشر');
         }
-        
-        // محاولة الانضمام التلقائي عند تحميل الصفحة
-        window.addEventListener('DOMContentLoaded', getRoomFromURL);
-    </script>
-</body>
-</html>
+
+        // Connect to signaling server
+        function connectToSignalingServer() {
+            return new Promise((resolve, reject) => {
+                state.socket = new WebSocket(CONFIG.SIGNALING_SERVER);
+                
+                state.socket.onopen = () => {
+                    console.log('✅ Connected to signaling server');
+                    state.reconnectAttempt = 0;
+                    resolve();
+                };
+
+                state.socket.onmessage = async (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('📩 Signal:', data.type);
+                        
+                        switch (data.type) {
+                            case 'welcome':
+                                console.log('Server welcome:', data.message);
+                                break;
+                                
+                            case 'room-joined':
+                                handleRoomJoined(data);
+                                break;
+                                
+                            case 'offer':
+                                handleBroadcasterOffer(data);
+                                break;
+                                
+                            case 'answer':
+                                handleBroadcasterAnswer(data);
+                                break;
+                                
+                            case 'ice-candidate':
+                                handleIceCandidate(data);
+                                break;
+                                
+                            case 'broadcaster-left':
+                                handleBroadcasterLeft(data);
+                                break;
+                                
+                            case 'error':
+                                showToast(`❌ ${data.message}`, 'error');
+                                resetConnection();
+                                break;
+                        }
+                    } catch (error) {
+                        console.error('Error processing message:', error);
+                    }
+                };
+
+                state.socket.onerror = (error) => {
+                    console.error('❌ WebSocket error:', error);
+                    reject(error);
+                };
+
+                state.socket.onclose = () => {
+                    console.log('🔌 WebSocket closed');
+                    
+                    if (state.isConnected && state.reconnectAttempt < CONFIG.RECONNECT_DELAYS.length) {
+                        const delay = CONFIG.RECONNECT_DELAYS[state.reconnectAttempt];
+                        state.reconnectAttempt++;
+                        
+                        console.log(`♻️ Reconnecting in ${delay}ms (attempt ${state.reconnectAttempt})`);
+                        updateStatus(`إعادة الاتصال... (${state.reconnectAttempt})`, 'connecting');
+                        
+                        setTimeout(() => {
+                            connectToSignalingServer().catch(console.error);
+                        }, delay);
+                    } else if (state.isConnected) {
+                        showToast('❌ فقدت الاتصال بالسيرفر', 'error');
+                        updateStatus('فقدان الاتصال', 'disconnected');
+                        resetConnection();
+                    }
+                };
+            });
+        }
+
+        // Handle room joined
+        function handleRoomJoined(data) {
+            console.log('✅ Joined room:', data.roomId);
+            updateStatus('جاري الاتصال بالمديع...', 'connecting');
+            showToast('✅ انضممت للغرفة بنجاح');
+        }
+
+        // Handle broadcaster offer
+        async function handleBroadcasterOffer(data) {
+            try {
+                console.log('📨 Received offer from broadcaster');
+                
+                if (!state.peerConnection) {
+                    await createPeerConnection();
+                }
+                
+                await state.peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+                
+                // Create and send answer
+                const answer = await state.peerConnection.createAnswer();
+                await state.peerConnection.setLocalDescription(answer);
+                
+                if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+                    state.socket.send(JSON.stringify({
+                        type: 'answer',
+                        answer: answer,
+                        roomId: state.currentRoomId,
+                        timestamp: Date.now()
+                    }));
+                }
+                
+            } catch (error) {
+                console.error('Error handling offer:', error);
+                showToast('❌ خطأ في الاتصال بالمديع', 'error');
+            }
+        }
+
+        // Handle broadcaster answer
+        async function handleBroadcasterAnswer(data) {
+            if (state.peerConnection && data.answer) {
+                try {
+                    await state.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+                } catch (error) {
+                    console.error('Error setting remote description:', error);
+                }
+            }
+        }
+
+        // Handle ICE candidate
+        function handleIceCandidate(data) {
+            if (state.peerConnection && data.candidate) {
+                state.peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate))
+                    .catch(error => console.error('Error adding ICE candidate:', error));
+            }
+        }
+
+        // Handle broadcaster left
+        function handleBroadcasterLeft(data) {
+            showToast('📢 المديع أنهى البث', 'error');
+            updateStatus('انتهى البث', 'disconnected');
+            resetConnection();
+            
+            videoOverlay.style.display = 'flex';
+            videoOverlay.innerHTML = `
+                <div class="overlay-icon">📢</div>
+                <h2 style="margin-bottom: 15px; font-size: 2rem;">انتهى البث</h2>
+                <p style="color: #a1cae2; max-width: 500px; margin-bottom: 25px;">
+                    المديع أنهى البث المباشر. يمكنك الانضمام لبث آخر.
+                </p>
+            `;
+        }
+
+        // Create WebRTC peer connection
+        async function createPeerConnection() {
+            state.peerConnection = new RTCPeerConnection({
+                iceServers: CONFIG.STUN_SERVERS,
+                iceCandidatePoolSize: 10,
+                iceTransportPolicy: 'all'
+            });
+
+            // Handle incoming stream
+            state.peerConnection.ontrack = (event) => {
+                console.log('📹 Received stream:', event.track.kind);
+                
+                if (remoteVideo.srcObject !== event.streams[0]) {
