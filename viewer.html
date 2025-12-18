@@ -285,4 +285,70 @@
             // معالجة مرشحات ICE
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate && socket && socket.readyState === WebSocket.OPEN) {
-                    socket.send(JSON.stringify
+                    socket.send(JSON.stringify({
+                        type: 'ice-candidate',
+                        candidate: event.candidate,
+                        roomId: currentRoomId
+                    }));
+                }
+            };
+            
+            // معالجة تيار الوسائط الوارد من المديع
+            peerConnection.ontrack = (event) => {
+                console.log('📹 تلقيت تيار وسائط من المديع:', event.track.kind);
+                if (remoteVideo.srcObject !== event.streams[0]) {
+                    remoteVideo.srcObject = event.streams[0];
+                    videoOverlay.classList.add('hidden');
+                    statusDiv.textContent = `🎥 تشاهد بثاً مباشراً - ${currentRoomId}`;
+                    
+                    // تحديث رسالة الترحيب
+                    videoOverlay.innerHTML = '<div class="overlay-icon">✅</div><h2 style="color: white; margin-bottom: 10px;">البث يعمل!</h2>';
+                    setTimeout(() => {
+                        videoOverlay.classList.add('hidden');
+                    }, 2000);
+                }
+            };
+            
+            peerConnection.onconnectionstatechange = () => {
+                console.log('حالة الاتصال:', peerConnection.connectionState);
+                if (peerConnection.connectionState === 'connected') {
+                    console.log('✅ اتصال WebRTC ناجح!');
+                }
+            };
+            
+            peerConnection.oniceconnectionstatechange = () => {
+                console.log('حالة ICE:', peerConnection.iceConnectionState);
+                if (peerConnection.iceConnectionState === 'failed') {
+                    console.error('❌ فشل اتصال ICE');
+                    statusDiv.textContent = '🔴 فشل الاتصال بالبث - حاول مرة أخرى';
+                    statusDiv.className = 'status disconnected';
+                }
+            };
+        }
+        
+        // وظيفة إعادة تعيين الاتصال
+        function resetConnection() {
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: 'leave-room',
+                    roomId: currentRoomId
+                }));
+                socket.close();
+            }
+            
+            remoteVideo.srcObject = null;
+            joinBtn.disabled = false;
+            leaveBtn.disabled = true;
+            viewerRoomId.disabled = false;
+        }
+        
+        // محاولة الانضمام التلقائي عند تحميل الصفحة
+        window.addEventListener('DOMContentLoaded', getRoomFromURL);
+    </script>
+</body>
+</html>
