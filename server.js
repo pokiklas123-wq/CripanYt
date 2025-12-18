@@ -3,15 +3,15 @@ const http = require('http');
 
 const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('✅ WebRTC Signaling Server is LIVE');
+    res.end('✅ WebRTC SFU Server - يدعم 100 مشاهد');
 });
 
 const wss = new WebSocket.Server({ server });
-const rooms = new Map(); // Map<RoomID, Set<WebSocket>>
+const rooms = new Map();
 
-console.log('🚀 Starting WebRTC Signaling Server...');
+console.log('🚀 Starting WebRTC SFU Server (50-100 viewers)...');
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
     ws.id = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
     console.log(`✅ Client connected: ${ws.id}`);
 
@@ -22,72 +22,178 @@ wss.on('connection', (ws) => {
             switch (data.type) {
                 case 'create-room':
                     if (!rooms.has(data.roomId)) {
-                        rooms.set(data.roomId, new Set());
+                        rooms.set(data.roomId, {
+                            broadcaster: ws,
+                            viewers: new Map(),
+                            mediaInfo: null
+                        });
                     }
-                    rooms.get(data.roomId).add(ws);
+                    rooms.get(data.roomId).broadcaster = ws;
                     ws.roomId = data.roomId;
-                    ws.isBroadcaster = true;
+                    ws.role = 'broadcaster';
                     
-                    ws.send(JSON.stringify({ type: 'room-created', roomId: data.roomId }));
+                    ws.send(JSON.stringify({ 
+                        type: 'room-created', 
+                        roomId: data.roomId,
+                        maxViewers: 100 
+                    }));
                     console.log(`🎥 Room created: ${data.roomId}`);
                     break;
 
                 case 'join-room':
                     if (rooms.has(data.roomId)) {
-                        rooms.get(data.roomId).add(ws);
+                        const room = rooms.get(data.roomId);
+                        const viewerId = data.viewerId || `viewer_${Date.now()}`;
+                        
+                        if (room.viewers.size >= 100) {
+                            ws.send(JSON.stringify({ 
+                                type: 'error', 
+                                message: 'الغرفة ممتلئة (100 مشاهد)' 
+                            }));
+                            break;
+                        }
+                        
+                        room.viewers.set(viewerId, ws);
                         ws.roomId = data.roomId;
+                        ws.role = 'viewer';
+                        ws.viewerId = viewerId;
                         
-                        ws.send(JSON.stringify({ type: 'room-joined', roomId: data.roomId }));
+                        ws.send(JSON.stringify({ 
+                            type: 'room-joined', 
+                            roomId: data.roomId,
+                            viewerId: viewerId,
+                            totalViewers: room.viewers.size 
+                        }));
                         
-                        // إبلاغ المذيع بوجود مشاهد جديد
-                        rooms.get(data.roomId).forEach(client => {
-                            if (client !== ws && client.isBroadcaster) {
-                                client.send(JSON.stringify({
-                                    type: 'new-viewer',
-                                    viewerId: ws.id // نستخدم ID السوكيت لضمان الدقة
-                                }));
-                            }
-                        });
-                        console.log(`👤 Viewer joined: ${data.roomId}`);
+                        // إعلام المديع
+                        if (room.broadcaster && room.broadcaster.readyState === 1) {
+                            room.broadcaster.send(JSON.stringify({
+                                type: 'new-viewer',
+                                viewerId: viewerId,
+                                totalViewers: room.viewers.size
+                            }));
+                        }
+                        
+                        console.log(`👤 Viewer ${viewerId} joined: ${data.roomId} (total: ${room.viewers.size})`);
                     } else {
-                        ws.send(JSON.stringify({ type: 'error', message: 'الغرفة غير موجودة أو لم يبدأ البث بعد' }));
+                        ws.send(JSON.stringify({ 
+                            type: 'error', 
+                            message: 'الغرفة غير موجودة' 
+                        }));
+                    }
+                    break;
+
+                case 'broadcast-media':
+                    if (rooms.has(data.roomId)) {
+                        const room = rooms.get(data.roomId);
+                        if (room.broadcaster === ws) {
+                            room.mediaInfo = {
+                                sdp: data.sdp,
+                                type: data.mediaType || 'video'
+                            };
+                            
+                            // إرسال لجميع المشاهدين (SFU)
+                            room.viewers.forEach((viewer, viewerId) => {
+                                if (viewer.readyState === 1) {
+                                    viewer.send(JSON.stringify({
+                                        type: 'media-stream',
+                                        roomId: data.roomId,
+                                        sdp: data.sdp,
+                                        mediaType: data.mediaType || 'video',
+                                        viewerId: viewerId
+                                    }));
+                                }
+                            });
+                            
+                            console.log(`📡 Broadcast to ${room.viewers.size} viewers`);
+                        }
                     }
                     break;
 
                 case 'offer':
                 case 'answer':
                 case 'ice-candidate':
-                    // توجيه الرسالة للشخص المحدد فقط (Targeted Signaling)
                     if (rooms.has(data.roomId)) {
-                        rooms.get(data.roomId).forEach(client => {
-                            // إذا كان هناك targetId، أرسل له فقط. وإلا أرسل للطرف الآخر
-                            const shouldSend = data.targetId ? client.id === data.targetId : client !== ws;
-                            
-                            if (shouldSend && client.readyState === WebSocket.OPEN) {
-                                // نضيف senderId ليعرف المستقبل من أين جاءت الرسالة
+                        const room = rooms.get(data.roomId);
+                        
+                        // توجيه الرسالة للشخص المحدد فقط
+                        room.viewers.forEach((viewer, viewerId) => {
+                            if (data.targetId && viewerId === data.targetId && viewer.readyState === 1) {
                                 data.senderId = ws.id;
-                                client.send(JSON.stringify(data));
+                                viewer.send(JSON.stringify(data));
                             }
                         });
+                        
+                        // أو للمديع
+                        if (room.broadcaster && room.broadcaster.readyState === 1 && 
+                            (!data.targetId || room.broadcaster.id === data.targetId)) {
+                            data.senderId = ws.id;
+                            room.broadcaster.send(JSON.stringify(data));
+                        }
+                    }
+                    break;
+
+                case 'leave-room':
+                    if (rooms.has(data.roomId)) {
+                        const room = rooms.get(data.roomId);
+                        if (ws.role === 'broadcaster') {
+                            // إعلام المشاهدين
+                            room.viewers.forEach(viewer => {
+                                if (viewer.readyState === 1) {
+                                    viewer.send(JSON.stringify({
+                                        type: 'broadcaster-left',
+                                        message: 'انتهى البث'
+                                    }));
+                                }
+                            });
+                            rooms.delete(data.roomId);
+                        } else if (ws.role === 'viewer') {
+                            room.viewers.delete(ws.viewerId);
+                        }
                     }
                     break;
             }
         } catch (error) {
-            console.error('❌ Error parsing message:', error);
+            console.error('❌ Error:', error);
         }
     });
 
     ws.on('close', () => {
+        console.log(`🔌 Client disconnected: ${ws.id}`);
+        
         if (ws.roomId && rooms.has(ws.roomId)) {
-            rooms.get(ws.roomId).delete(ws);
-            if (rooms.get(ws.roomId).size === 0) {
+            const room = rooms.get(ws.roomId);
+            
+            if (ws.role === 'broadcaster') {
+                // إعلام المشاهدين
+                room.viewers.forEach(viewer => {
+                    if (viewer.readyState === 1) {
+                        viewer.send(JSON.stringify({
+                            type: 'broadcaster-left',
+                            message: 'انتهى البث'
+                        }));
+                    }
+                });
                 rooms.delete(ws.roomId);
-                console.log(`🗑 Room deleted: ${ws.roomId}`);
+            } else if (ws.role === 'viewer') {
+                room.viewers.delete(ws.viewerId);
+                
+                // إعلام المديع
+                if (room.broadcaster && room.broadcaster.readyState === 1) {
+                    room.broadcaster.send(JSON.stringify({
+                        type: 'viewer-left',
+                        viewerId: ws.viewerId,
+                        totalViewers: room.viewers.size
+                    }));
+                }
             }
         }
-        console.log(`🔌 Client disconnected: ${ws.id}`);
     });
 });
+
+setInterval(() => {
+    console.log(`📊 Active rooms: ${rooms.size}`);
+}, 30000);
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
