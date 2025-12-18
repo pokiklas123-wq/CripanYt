@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>المديع - بث مباشر</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; min-height: 100vh; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 2px solid #00adb5; }
+        h1 { color: #00adb5; font-size: 2.2rem; margin-bottom: 10px; }
+        .subtitle { color: #a1cae2; font-size: 1.1rem; }
+        
+        .main-content { display: flex; flex-wrap: wrap; gap: 30px; margin-bottom: 30px; }
+        .control-panel { flex: 1; min-width: 300px; background: rgba(255, 255, 255, 0.05); padding: 25px; border-radius: 15px; border: 1px solid #30475e; }
+        .video-panel { flex: 2; min-width: 300px; }
+        
+        .input-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; color: #a1cae2; font-weight: 500; }
+        input { width: 100%; padding: 12px 15px; background: rgba(255, 255, 255, 0.1); border: 1px solid #30475e; border-radius: 8px; color: white; font-size: 1rem; }
+        input:focus { outline: none; border-color: #00adb5; }
+        
+        .buttons { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 25px; }
+        button { flex: 1; min-width: 140px; padding: 14px; border: none; border-radius: 8px; font-weight: 600; font-size: 1rem; cursor: pointer; transition: all 0.3s ease; }
+        #startBtn { background: linear-gradient(to right, #00b09b, #96c93d); color: white; }
+        #stopBtn { background: linear-gradient(to right, #ff416c, #ff4b2b); color: white; }
+        button:hover { transform: translateY(-2px); opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .link-box { background: rgba(0, 173, 181, 0.1); border: 1px dashed #00adb5; border-radius: 8px; padding: 15px; margin-top: 20px; }
+        #broadcastLink { word-break: break-all; color: #4cc9f0; }
+        #copyBtn { background: #30475e; color: white; margin-top: 10px; }
+        
+        .video-container { background: #000; border-radius: 10px; overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); }
+        video { width: 100%; height: auto; max-height: 500px; display: block; }
+        .status { text-align: center; padding: 15px; background: rgba(255, 255, 255, 0.05); border-radius: 8px; margin-top: 20px; }
+        .status.connected { background: rgba(0, 255, 0, 0.1); color: #4ade80; }
+        .status.disconnected { background: rgba(255, 0, 0, 0.1); color: #f87171; }
+        
+        footer { text-align: center; margin-top: 40px; color: #a1cae2; font-size: 0.9rem; }
+        
+        @media (max-width: 768px) {
+            .main-content { flex-direction: column; }
+            .control-panel, .video-panel { width: 100%; }
+            button { min-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎥 منصة البث المباشر</h1>
+            <p class="subtitle">ابدأ بثك المباشر وشارك الرابط مع جمهورك</p>
+        </header>
+        
+        <div class="main-content">
+            <div class="control-panel">
+                <h2 style="margin-bottom: 20px; color: #a1cae2;">🔧 لوحة التحكم</h2>
+                
+                <div class="input-group">
+                    <label for="roomId">🔑 معرف البث (Room ID)</label>
+                    <input type="text" id="roomId" placeholder="أدخل معرفاً مميزاً للبث، مثلاً: my-live-stream-123" value="live-room-<?php echo rand(1000,9999); ?>">
+                </div>
+                
+                <div class="buttons">
+                    <button id="startBtn">▶ بدء البث</button>
+                    <button id="stopBtn" disabled>⏹ إيقاف البث</button>
+                </div>
+                
+                <div class="link-box">
+                    <p style="margin-bottom: 10px; color: #a1cae2;">🔗 رابط البث للمشاهدين:</p>
+                    <p id="broadcastLink" style="padding: 8px; background: rgba(0,0,0,0.2); border-radius: 5px;">سيظهر هنا بعد بدء البث</p>
+                    <button id="copyBtn" disabled>📋 نسخ الرابط</button>
+                </div>
+                
+                <div class="status disconnected" id="status">
+                    ⚪ غير متصل - أدخل معرف البث واضغط "بدء البث"
+                </div>
+            </div>
+            
+            <div class="video-panel">
+                <h2 style="margin-bottom: 15px; color: #a1cae2;">📹 كاميرا المديع</h2>
+                <div class="video-container">
+                    <video id="localVideo" autoplay muted playsinline></video>
+                </div>
+                <p style="text-align: center; margin-top: 10px; color: #a1cae2; font-size: 0.9rem;">هذا ما يراه المديع (الفيديو صامت)</p>
+            </div>
+        </div>
+        
+        <footer>
+            <p>© 2025 منصة البث المباشر | تم التطوير باستخدام تقنية WebRTC</p>
+            <p style="font-size: 0.8rem; margin-top: 5px;">يدعم المتصفحات الحديثة: Chrome, Firefox, Edge, Safari</p>
+        </footer>
+    </div>
+
+    <script>
+        // العناصر الأساسية
+        const roomIdInput = document.getElementById('roomId');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const broadcastLink = document.getElementById('broadcastLink');
+        const copyBtn = document.getElementById('copyBtn');
+        const statusDiv = document.getElementById('status');
+        const localVideo = document.getElementById('localVideo');
+        
+        // المتغيرات
+        let localStream = null;
+        let peerConnection = null;
+        let socket = null;
+        let currentRoomId = '';
+        const viewers = new Set();
+        
+        // إعدادات STUN/ICE (مهمة لتجاوز الجدران النارية)[citation:2][citation:7]
+        const configuration = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' }
+            ]
+        };
+        
+        // استبدل هذا بعنوان سيرفر الإشارة الفعلي
+        const SIGNALING_SERVER = 'wss://cripanyt.onrender.co'; // أو 'ws://localhost:8080' للتجربة المحلية
+        
+        // بدء البث
+        startBtn.addEventListener('click', async () => {
+            currentRoomId = roomIdInput.value.trim();
+            if (!currentRoomId) {
+                alert('يرجى إدخال معرف البث');
+                return;
+            }
+            
+            try {
+                statusDiv.textContent = '⏳ جاري إعداد البث...';
+                statusDiv.className = 'status';
+                
+                // 1. الاتصال بسيرفر الإشارة
+                connectSignaling();
+                
+                // 2. الوصول إلى الكاميرا والميكروفون[citation:7]
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        frameRate: { ideal: 30 }
+                    },
+                    audio: true
+                });
+                
+                localVideo.srcObject = localStream;
+                
+                // 3. إنشاء اتصال WebRTC
+                createPeerConnection();
+                
+                // 4. إضافة تيار الوسائط المحلي
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+                
+                // 5. إرسال طلب إنشاء غرفة للسيرفر
+                socket.send(JSON.stringify({
+                    type: 'create-room',
+                    roomId: currentRoomId
+                }));
+                
+                // 6. تحديث واجهة المستخدم
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                roomIdInput.disabled = true;
+                
+                // إنشاء رابط البث
+                const viewerUrl = `${window.location.origin}/viewer.html?room=${encodeURIComponent(currentRoomId)}`;
+                broadcastLink.textContent = viewerUrl;
+                broadcastLink.href = viewerUrl;
+                copyBtn.disabled = false;
+                
+                statusDiv.textContent = `🟢 البث مباشر - معرف الغرفة: ${currentRoomId}`;
+                statusDiv.className = 'status connected';
+                
+                console.log('بدأ البث بنجاح في الغرفة:', currentRoomId);
+                
+            } catch (error) {
+                console.error('خطأ في بدء البث:', error);
+                statusDiv.textContent = '🔴 فشل بدء البث - تحقق من صلاحيات الكاميرا';
+                statusDiv.className = 'status disconnected';
+                
+                if (localStream) {
+                    localStream.getTracks().forEach(track => track.stop());
+                }
+            }
+        });
+        
+        // إيقاف البث
+        stopBtn.addEventListener('click', () => {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localVideo.srcObject = null;
+            }
+            
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: 'leave-room',
+                    roomId: currentRoomId
+                }));
+                socket.close();
+            }
+            
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            roomIdInput.disabled = false;
+            copyBtn.disabled = true;
+            
+            broadcastLink.textContent = 'سيظهر هنا بعد بدء البث';
+            broadcastLink.href = '#';
+            
+            statusDiv.textContent = '⚪ البث متوقف - يمكنك بدء بث جديد';
+            statusDiv.className = 'status disconnected';
+            
+            console.log('تم إيقاف البث');
+        });
+        
+        // نسخ الرابط
+        copyBtn.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(broadcastLink.textContent);
+                const originalText = copyBtn.textContent;
+                copyBtn.textContent = '✅ تم النسخ!';
+                setTimeout(() => {
+                    copyBtn.textContent = originalText;
+                }, 2000);
+            } catch (err) {
+                console.error('فشل نسخ الرابط:', err);
+                alert('تعذر نسخ الرابط. يرجى نسخه يدوياً.');
+            }
+        });
+        
+        // وظيفة الاتصال بسيرفر الإشارة
+        function connectSignaling() {
+            socket = new WebSocket(SIGNALING_SERVER);
+            
+            socket.onopen = () => {
+                console.log('✅ متصل بسيرفر الإشارة');
+            };
+            
+            socket.onmessage = async (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('📩 رسالة من السيرفر:', data);
+                    
+                    switch (data.type) {
+                        case 'room-created':
+                            console.log('✅ تم إنشاء الغرفة:', data.roomId);
+                            break;
+                            
+                        case 'new-viewer':
+                            console.log('👤 مشاهد جديد:', data.viewerId);
+                            viewers.add(data.viewerId);
+                            // يمكنك إضافة منطق لمعالجة المشاهدين الجدد هنا
+                            break;
+                            
+                        case 'offer':
+                            // المديع يتلقى عرضاً من مشاهد (نموذج P2P كامل)
+                            if (peerConnection && data.offer) {
+                                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+                                const answer = await peerConnection.createAnswer();
+                                await peerConnection.setLocalDescription(answer);
+                                
+                                socket.send(JSON.stringify({
+                                    type: 'answer',
+                                    answer: answer,
+                                    roomId: currentRoomId,
+                                    to: data.from
+                                }));
+                            }
+                            break;
+                            
+                        case 'ice-candidate':
+                            // معالجة مرشح ICE
+                            if (peerConnection && data.candidate) {
+                                try {
+                                    await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                                } catch (e) {
+                                    console.error('خطأ في إضافة مرشح ICE:', e);
+                                }
+                            }
+                            break;
+                    }
+                } catch (error) {
+                    console.error('خطأ في معالجة رسالة السيرفر:', error);
+                }
+            };
+            
+            socket.onerror = (error) => {
+                console.error('❌ خطأ في اتصال WebSocket:', error);
+                statusDiv.textContent = '🔴 فشل الاتصال بالسيرفر';
+                statusDiv.className = 'status disconnected';
+            };
+            
+            socket.onclose = () => {
+                console.log('🔌 انقطع الاتصال بالسيرفر');
+                if (statusDiv.className.includes('connected')) {
+                    statusDiv.textContent = '🔴 انقطع الاتصال بالسيرفر - البث متوقف';
+                    statusDiv.className = 'status disconnected';
+                }
+            };
+        }
+        
+        // وظيفة إنشاء اتصال WebRTC[citation:3][citation:7]
+        function createPeerConnection() {
+            peerConnection = new RTCPeerConnection(configuration);
+            
+            // معالجة مرشحات ICE
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate && socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({
+                        type: 'ice-candidate',
+                        candidate: event.candidate,
+                        roomId: currentRoomId
+                    }));
+                }
+            };
+            
+            // معالجة اتصالات المشاهدين الجدد
+            peerConnection.ontrack = (event) => {
+                console.log('📹 تيار وسائط جديد من مشاهد:', event.track.kind);
+                // في بث أحادي الاتجاه، قد لا نحتاج لعرض تيار المشاهد
+            };
+            
+            peerConnection.onconnectionstatechange = () => {
+                console.log('حالة الاتصال:', peerConnection.connectionState);
+            };
+            
+            peerConnection.oniceconnectionstatechange = () => {
+                console.log('حالة ICE:', peerConnection.iceConnectionState);
+            };
+        }
+        
+        // توليد معرف غرفة عشوائي إذا كان الحقل فارغاً
+        roomIdInput.addEventListener('focus', () => {
+            if (!roomIdInput.value) {
+                roomIdInput.value = `live-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 5)}`;
+            }
+        });
+    </script>
+</body>
+</html>
