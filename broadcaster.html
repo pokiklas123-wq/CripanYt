@@ -21,7 +21,7 @@
 </head>
 <body>
     <div class="container">
-        <h2>🎥 المديع - لوحة التحكم</h2>
+        <h2>🎥 المديع - بث لـ 100 مشاهد</h2>
         
         <div>
             <label>معرف الغرفة:</label>
@@ -37,8 +37,7 @@
         <video id="localVideo" autoplay muted playsinline></video>
         
         <div style="text-align: center; margin-top: 10px;">
-            <label>👁️ المشاهدون المتصلون:</label>
-            <div id="viewerCount" style="font-size: 32px; font-weight: bold; color: #4cc9f0;">0</div>
+            <label>👁️ المشاهدون: <span id="viewerCount" style="font-size: 24px; color: #4cc9f0;">0</span>/100</label>
         </div>
         
         <h3>📋 سجل النظام:</h3>
@@ -46,7 +45,7 @@
     </div>
 
     <script>
-        const SERVER = 'wss://cripanyt.onrender.com'; // تأكد من أن هذا الرابط صحيح ويعمل
+        const SERVER = 'wss://cripanyt.onrender.com';
         
         const elements = {
             roomId: document.getElementById('roomId'),
@@ -62,9 +61,10 @@
         let state = {
             stream: null,
             socket: null,
-            peerConnections: {}, // Object to store PCs by viewerId
+            peerConnection: null, // اتصال واحد فقط مع SFU
             roomId: '',
-            viewerCount: 0
+            viewerCount: 0,
+            iceCandidatesQueue: []
         };
         
         function log(msg) {
@@ -82,9 +82,12 @@
             state.roomId = elements.roomId.value.trim();
             if(!state.roomId) return alert("أدخل معرف الغرفة");
 
-            // 1. تشغيل الكاميرا أولاً
+            // 1. تشغيل الكاميرا
             try {
-                state.stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                state.stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 1280, height: 720 },
+                    audio: true 
+                });
                 elements.localVideo.srcObject = state.stream;
                 log("✅ تم تشغيل الكاميرا");
             } catch (e) {
@@ -92,17 +95,22 @@
                 return;
             }
 
-            // 2. الاتصال بالسيرفر
+            // 2. الاتصال بالسيرفر SFU
             updateStatus('جاري الاتصال بالسيرفر...', 'connecting');
             state.socket = new WebSocket(SERVER);
             
             state.socket.onopen = () => {
-                log('✅ متصل بسيرفر الإشارة');
-                state.socket.send(JSON.stringify({ type: 'create-room', roomId: state.roomId }));
+                log('✅ متصل بسيرفر SFU');
+                state.socket.send(JSON.stringify({ 
+                    type: 'create-room', 
+                    roomId: state.roomId 
+                }));
                 
                 elements.startBtn.disabled = true;
                 elements.stopBtn.disabled = false;
-                updateStatus(`📡 البث مباشر: ${state.roomId}`, 'connected');
+                
+                // إنشاء اتصال WebRTC مع SFU
+                createSFUConnection();
                 
                 // رابط المشاهدة
                 const url = location.href.replace('broadcaster.html', 'viewer.html') + '?room=' + state.roomId;
@@ -112,75 +120,105 @@
             state.socket.onmessage = async (event) => {
                 const data = JSON.parse(event.data);
                 
-                if (data.type === 'new-viewer') {
-                    handleNewViewer(data.viewerId);
-                } else if (data.type === 'answer') {
-                    const pc = state.peerConnections[data.senderId];
-                    if (pc) {
-                        await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-                        log(`✅ تم استلام الموافقة (Answer) من ${data.senderId}`);
+                if (data.type === 'room-created') {
+                    log(`✅ الغرفة جاهزة لـ ${data.maxViewers} مشاهد`);
+                    updateStatus(`📡 البث مباشر: ${state.roomId}`, 'connected');
+                } 
+                else if (data.type === 'new-viewer') {
+                    state.viewerCount = data.totalViewers;
+                    elements.viewerCount.textContent = `${state.viewerCount}/100`;
+                    log(`👤 مشاهد جديد (${state.viewerCount}/100)`);
+                }
+                else if (data.type === 'viewer-left') {
+                    state.viewerCount = data.totalViewers;
+                    elements.viewerCount.textContent = `${state.viewerCount}/100`;
+                    log(`👋 مشاهد غادر (${state.viewerCount}/100)`);
+                }
+                else if (data.type === 'answer') {
+                    if (state.peerConnection) {
+                        await state.peerConnection.setRemoteDescription(
+                            new RTCSessionDescription(data.answer)
+                        );
+                        log('✅ تم استلام الرد من SFU');
                     }
-                } else if (data.type === 'ice-candidate') {
-                    const pc = state.peerConnections[data.senderId];
-                    if (pc && data.candidate) {
-                        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+                }
+                else if (data.type === 'ice-candidate') {
+                    if (state.peerConnection) {
+                        await state.peerConnection.addIceCandidate(
+                            new RTCIceCandidate(data.candidate)
+                        );
                     }
                 }
             };
 
-            state.socket.onclose = () => updateStatus('🔴 انقطع الاتصال', 'disconnected');
+            state.socket.onclose = () => {
+                log('🔌 انقطع الاتصال بالسيرفر');
+                updateStatus('🔴 انقطع الاتصال', 'disconnected');
+            };
         };
 
-        async function handleNewViewer(viewerId) {
-            log(`👤 مشاهد جديد يحاول الاتصال: ${viewerId}`);
+        async function createSFUConnection() {
+            log('🔗 إنشاء اتصال مع SFU...');
             
-            const pc = new RTCPeerConnection({
-                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            state.peerConnection = new RTCPeerConnection({
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
             });
             
-            state.peerConnections[viewerId] = pc;
+            // إضافة تيار الوسائط
+            state.stream.getTracks().forEach(track => {
+                state.peerConnection.addTrack(track, state.stream);
+            });
             
-            // إضافة التراكات
-            state.stream.getTracks().forEach(track => pc.addTrack(track, state.stream));
-            
-            pc.onicecandidate = (event) => {
-                if (event.candidate) {
+            // ICE Candidates
+            state.peerConnection.onicecandidate = (event) => {
+                if (event.candidate && state.socket) {
                     state.socket.send(JSON.stringify({
                         type: 'ice-candidate',
                         candidate: event.candidate,
-                        roomId: state.roomId,
-                        targetId: viewerId
+                        roomId: state.roomId
                     }));
                 }
             };
             
-            pc.onconnectionstatechange = () => {
-                if (pc.connectionState === 'connected') {
-                    log(`✅ المشاهد ${viewerId} متصل الآن`);
-                    state.viewerCount++;
-                    elements.viewerCount.textContent = state.viewerCount;
-                } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-                    log(`❌ المشاهد ${viewerId} غادر`);
-                    pc.close();
-                    delete state.peerConnections[viewerId];
-                    state.viewerCount = Math.max(0, state.viewerCount - 1);
-                    elements.viewerCount.textContent = state.viewerCount;
-                }
-            };
-
-            // إنشاء العرض (Offer)
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
+            // إنشاء العرض وإرساله لـ SFU
+            const offer = await state.peerConnection.createOffer({
+                offerToReceiveAudio: false,
+                offerToReceiveVideo: false
+            });
             
+            await state.peerConnection.setLocalDescription(offer);
+            
+            // إرسال العرض إلى SFU (سيوزعه على جميع المشاهدين)
             state.socket.send(JSON.stringify({
-                type: 'offer',
-                offer: offer,
+                type: 'broadcast-media',
                 roomId: state.roomId,
-                targetId: viewerId // مهم جداً: إرسال العرض لهذا المشاهد فقط
+                sdp: offer,
+                mediaType: 'video'
             }));
+            
+            log('📤 أرسل تيار الوسائط إلى SFU');
         }
 
-        elements.stopBtn.onclick = () => location.reload();
+        elements.stopBtn.onclick = () => {
+            log('⏹️ إيقاف البث...');
+            
+            if (state.stream) {
+                state.stream.getTracks().forEach(track => track.stop());
+            }
+            
+            if (state.peerConnection) {
+                state.peerConnection.close();
+            }
+            
+            if (state.socket) {
+                state.socket.close();
+            }
+            
+            location.reload();
+        };
     </script>
 </body>
 </html>
