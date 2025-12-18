@@ -5,43 +5,58 @@
     <title>مشغل البث المباشر</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #000; }
+        body { background: #000; font-family: Arial, sans-serif; }
         #container { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
-        video { width: 100%; height: 100%; object-fit: contain; }
-        #loading { position: absolute; color: white; font-size: 20px; }
-        #error { position: absolute; color: red; font-size: 18px; display: none; text-align: center; }
-        #error button { margin-top: 20px; padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; }
+        video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+        #status { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; text-align: center; z-index: 100; }
+        #error { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: red; text-align: center; display: none; z-index: 100; }
+        #controls { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; z-index: 50; }
+        #controls button { background: rgba(0, 0, 0, 0.7); color: white; border: 1px solid #444; padding: 10px 15px; cursor: pointer; border-radius: 5px; }
+        #controls button:hover { background: rgba(50, 50, 50, 0.7); }
     </style>
 </head>
 <body>
     <div id="container">
-        <div id="loading">جاري تحميل البث...</div>
+        <div id="status">جاري تحميل البث...</div>
         <div id="error">
-            <div>⚠️ خطأ في تحميل البث</div>
+            <div style="margin-bottom: 10px;">⚠️ خطأ في تحميل البث</div>
             <button onclick="location.reload()">إعادة المحاولة</button>
         </div>
         <video id="video" autoplay playsinline controls></video>
+    </div>
+    
+    <div id="controls">
+        <button onclick="toggleFullscreen()">ملء الشاشة</button>
+        <button onclick="location.reload()">إعادة التحميل</button>
+        <button onclick="openInNewTab()">فتح في نافذة</button>
     </div>
 
     <script>
         const SERVER = 'wss://cripanyt.onrender.com';
         let socket = null;
         let peerConnection = null;
+        let roomId = '';
         
         async function init() {
             const urlParams = new URLSearchParams(window.location.search);
-            const roomId = urlParams.get('room');
+            roomId = urlParams.get('room');
             
             if (!roomId) {
                 showError('لم يتم تحديد معرف البث');
                 return;
             }
             
-            const viewerId = 'player_' + Date.now();
+            document.getElementById('status').textContent = `جاري الانضمام إلى البث ${roomId}...`;
+            connectToServer();
+        }
+        
+        function connectToServer() {
+            if (socket) socket.close();
             
             socket = new WebSocket(SERVER);
             
             socket.onopen = () => {
+                const viewerId = 'player_' + Date.now();
                 socket.send(JSON.stringify({
                     type: 'join-room',
                     roomId: roomId,
@@ -53,38 +68,48 @@
                 const data = JSON.parse(event.data);
                 
                 if (data.type === 'room-joined') {
-                    console.log('✅ Joined room');
+                    document.getElementById('status').textContent = 'بانتظار البث...';
                 }
-                else if (data.type === 'media-stream') {
-                    await setupWebRTC(data.sdp, roomId, viewerId);
+                else if (data.type === 'broadcast-offer') {
+                    document.getElementById('status').textContent = 'جاري تشغيل البث...';
+                    await setupWebRTC(data.sdp);
                 }
                 else if (data.type === 'ice-candidate') {
-                    if (peerConnection) {
+                    if (peerConnection && peerConnection.remoteDescription) {
                         peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
                     }
                 }
                 else if (data.type === 'broadcaster-left') {
                     showError('انتهى البث المباشر');
                 }
+                else if (data.type === 'error') {
+                    showError(data.message);
+                }
             };
             
-            socket.onerror = () => {
-                showError('خطأ في الاتصال');
+            socket.onclose = () => {
+                document.getElementById('status').textContent = 'انقطع الاتصال - جاري إعادة المحاولة...';
+                setTimeout(() => connectToServer(), 3000);
             };
         }
         
-        async function setupWebRTC(sdp, roomId, viewerId) {
+        async function setupWebRTC(sdp) {
             if (peerConnection) peerConnection.close();
             
             peerConnection = new RTCPeerConnection({
-                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' }
+                ]
             });
             
             peerConnection.ontrack = (event) => {
                 const video = document.getElementById('video');
                 video.srcObject = event.streams[0];
-                document.getElementById('loading').style.display = 'none';
-                video.play();
+                document.getElementById('status').style.display = 'none';
+                video.play().catch(e => {
+                    document.getElementById('status').style.display = 'block';
+                    document.getElementById('status').textContent = 'اضغط على الفيديو للسماح بالتشغيل';
+                });
             };
             
             peerConnection.onicecandidate = (event) => {
@@ -92,8 +117,7 @@
                     socket.send(JSON.stringify({
                         type: 'ice-candidate',
                         candidate: event.candidate,
-                        roomId: roomId,
-                        targetId: 'broadcaster'
+                        roomId: roomId
                     }));
                 }
             };
@@ -109,19 +133,33 @@
                 socket.send(JSON.stringify({
                     type: 'answer',
                     answer: answer,
-                    roomId: roomId,
-                    viewerId: viewerId
+                    roomId: roomId
                 }));
             } catch (error) {
-                console.error('WebRTC Error:', error);
+                console.error('WebRTC error:', error);
                 showError('خطأ في تشغيل الفيديو');
             }
         }
         
         function showError(msg) {
-            document.getElementById('loading').style.display = 'none';
+            document.getElementById('status').style.display = 'none';
             document.getElementById('error').style.display = 'block';
             document.getElementById('error').firstChild.textContent = msg;
+        }
+        
+        function toggleFullscreen() {
+            const video = document.getElementById('video');
+            if (!document.fullscreenElement) {
+                video.requestFullscreen().catch(err => {
+                    console.error('Fullscreen error:', err);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        }
+        
+        function openInNewTab() {
+            window.open(`viewer.html?room=${roomId}`, '_blank');
         }
         
         window.addEventListener('DOMContentLoaded', init);
