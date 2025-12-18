@@ -1,342 +1,216 @@
 <!DOCTYPE html>
-<html>
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <title>المشاهد - مشاهدة البث</title>
     <style>
-        body { font-family: Arial; margin: 0; padding: 20px; background: #0f172a; color: white; }
-        .container { max-width: 1200px; margin: auto; }
-        .control-panel { background: #1e293b; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
-        input, button { padding: 12px; font-size: 16px; border-radius: 5px; border: none; }
-        input { width: 70%; background: #334155; color: white; }
-        button { width: 28%; margin-left: 2%; background: #3b82f6; color: white; cursor: pointer; }
-        button:disabled { background: #475569; cursor: not-allowed; }
-        video { width: 100%; background: black; border-radius: 10px; }
-        .status { padding: 15px; border-radius: 5px; margin: 15px 0; text-align: center; }
-        .green { background: #10b981; }
-        .red { background: #ef4444; }
-        .yellow { background: #f59e0b; }
-        .log { background: #000; color: #0f0; padding: 15px; border-radius: 5px; height: 200px; overflow-y: scroll; font-family: monospace; }
-        .loading { text-align: center; padding: 50px; font-size: 20px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background: #1a1a2e; color: white; margin: 0; }
+        .container { max-width: 800px; margin: auto; }
+        .input-group { background: #16213e; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        input, button { width: 100%; padding: 15px; margin: 10px 0; font-size: 18px; border-radius: 5px; border: none; box-sizing: border-box; }
+        input { background: #0f3460; color: white; }
+        button { background: #7209b7; color: white; cursor: pointer; font-weight: bold; }
+        button:disabled { background: #555; cursor: not-allowed; }
+        .video-wrapper { position: relative; width: 100%; background: black; border-radius: 10px; overflow: hidden; min-height: 300px; }
+        video { width: 100%; height: 100%; display: block; }
+        .status { padding: 15px; border-radius: 5px; margin: 15px 0; text-align: center; font-size: 18px; font-weight: bold; }
+        .connected { background: #2ec4b6; color: #000; }
+        .disconnected { background: #e71d36; }
+        .connecting { background: #f8961e; color: #000; }
+        .overlay { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 10;
+        }
+        .log { background: #000; color: #0f0; padding: 15px; border-radius: 10px; font-family: monospace; height: 150px; overflow-y: scroll; direction: ltr; text-align: left; font-size: 12px; margin-top: 20px; border: 1px solid #333; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1 style="text-align: center; color: #60a5fa;">👁️ مشاهدة البث المباشر</h1>
+        <h1 style="text-align: center; color: #4cc9f0;">👁️ مشاهدة البث المباشر</h1>
         
-        <div class="control-panel">
-            <input type="text" id="roomId" placeholder="أدخل معرف البث (مثال: test123)">
+        <div class="input-group">
+            <label>🔑 معرف البث:</label>
+            <input type="text" id="roomId" placeholder="أدخل معرف البث هنا">
             <button id="joinBtn">🚀 انضم للبث</button>
-            <button id="leaveBtn" disabled>⏹️ مغادرة</button>
         </div>
         
-        <div id="status" class="status red">🔴 غير متصل</div>
+        <div id="status" class="status disconnected">🔴 غير متصل</div>
         
-        <div id="loading" class="loading" style="display: none;">
-            <div style="font-size: 48px; margin-bottom: 20px;">⏳</div>
-            <h2>جاري الاتصال...</h2>
-            <p>الرجاء الانتظار</p>
+        <div class="video-wrapper">
+            <div id="overlay" class="overlay">
+                <div style="font-size: 50px;">📺</div>
+                <h3 id="overlayText">في انتظار البث...</h3>
+            </div>
+            <!-- playsinline مهم جداً للموبايل -->
+            <video id="remoteVideo" autoplay playsinline controls></video>
         </div>
         
-        <video id="remoteVideo" playsinline></video>
-        
-        <h3 style="color: #60a5fa; margin-top: 30px;">📋 سجل الأحداث:</h3>
-        <div id="log" class="log">انضم للبث لبدء السجل...</div>
+        <div id="log" class="log">سجل الأحداث...</div>
     </div>
 
     <script>
-        // === الإعدادات ===
         const SERVER = 'wss://cripanyt.onrender.com';
         
-        // === العناصر ===
         const elements = {
             roomId: document.getElementById('roomId'),
             joinBtn: document.getElementById('joinBtn'),
-            leaveBtn: document.getElementById('leaveBtn'),
             status: document.getElementById('status'),
             remoteVideo: document.getElementById('remoteVideo'),
-            loading: document.getElementById('loading'),
+            overlay: document.getElementById('overlay'),
+            overlayText: document.getElementById('overlayText'),
             log: document.getElementById('log')
         };
         
-        // === الحالة ===
         let state = {
             socket: null,
             peerConnection: null,
             roomId: '',
-            stream: null,
-            isPlaying: false
+            playPromise: undefined // لتتبع حالة التشغيل ومنع التضارب
         };
         
-        // === الدوال المساعدة ===
-        function log(message) {
-            const time = new Date().toLocaleTimeString();
-            elements.log.innerHTML = `[${time}] ${message}<br>` + elements.log.innerHTML;
-            console.log(message);
+        function log(msg) {
+            elements.log.innerHTML = `> ${msg}<br>` + elements.log.innerHTML;
+            console.log(msg);
         }
         
-        function updateStatus(text, color) {
+        function updateStatus(text, className) {
             elements.status.textContent = text;
-            elements.status.className = `status ${color}`;
+            elements.status.className = `status ${className}`;
         }
-        
-        // === 1. الانضمام للبث ===
+
+        // قراءة معرف الغرفة من الرابط
+        const urlParams = new URLSearchParams(window.location.search);
+        if(urlParams.get('room')) elements.roomId.value = urlParams.get('room');
+
         elements.joinBtn.onclick = () => {
             state.roomId = elements.roomId.value.trim();
+            if (!state.roomId) return alert('أدخل معرف البث');
             
-            if (!state.roomId) {
-                alert('⚠️ أدخل معرف البث');
-                return;
-            }
-            
-            log(`🚀 الانضمام للبث: ${state.roomId}`);
-            updateStatus('⏳ جاري الاتصال...', 'yellow');
-            elements.loading.style.display = 'block';
-            elements.remoteVideo.style.display = 'none';
-            
-            // إعادة تعيين الفيديو
-            elements.remoteVideo.srcObject = null;
-            elements.remoteVideo.load();
+            elements.joinBtn.disabled = true;
+            updateStatus('جاري الاتصال...', 'connecting');
+            elements.overlayText.textContent = "جاري الاتصال بالسيرفر...";
             
             connectToServer();
         };
-        
-        // === 2. الاتصال بالسيرفر ===
+
         function connectToServer() {
             state.socket = new WebSocket(SERVER);
             
             state.socket.onopen = () => {
                 log('✅ متصل بالسيرفر');
-                
-                state.socket.send(JSON.stringify({
-                    type: 'join-room',
-                    roomId: state.roomId,
-                    viewerId: 'viewer-' + Date.now()
-                }));
-                
-                createPeerConnection();
+                state.socket.send(JSON.stringify({ type: 'join-room', roomId: state.roomId }));
             };
             
-            state.socket.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    
-                    if (data.type === 'room-joined') {
-                        log('✅ انضممت للغرفة');
-                        updateStatus('✅ متصل - بانتظار البث...', 'yellow');
+            state.socket.onmessage = async (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'room-joined') {
+                    log('✅ تم الانضمام للغرفة. بانتظار المذيع...');
+                    elements.overlayText.textContent = "بانتظار إشارة الفيديو...";
+                } 
+                else if (data.type === 'error') {
+                    alert(data.message);
+                    location.reload();
+                }
+                else if (data.type === 'offer') {
+                    handleOffer(data);
+                }
+                else if (data.type === 'ice-candidate') {
+                    if (state.peerConnection) {
+                        state.peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate))
+                        .catch(e => console.error(e));
                     }
-                    else if (data.type === 'offer') {
-                        handleOffer(data);
-                    }
-                    else if (data.type === 'ice-candidate') {
-                        handleIceCandidate(data);
-                    }
-                    else if (data.type === 'error') {
-                        log(`❌ ${data.message}`);
-                        updateStatus(`❌ ${data.message}`, 'red');
-                    }
-                } catch (error) {
-                    log(`❌ خطأ: ${error}`);
                 }
             };
             
-            state.socket.onerror = () => {
-                log('❌ خطأ في الاتصال');
+            state.socket.onclose = () => {
+                updateStatus('🔴 انقطع الاتصال', 'disconnected');
+                elements.joinBtn.disabled = false;
             };
+        }
+
+        async function handleOffer(data) {
+            log('📨 استلام عرض (Offer) من المذيع');
             
-            elements.joinBtn.disabled = true;
-            elements.leaveBtn.disabled = false;
-        };
-        
-        // === 3. إنشاء اتصال WebRTC ===
-        function createPeerConnection() {
-            log('🔗 إنشاء اتصال WebRTC');
+            if (state.peerConnection) state.peerConnection.close();
             
             state.peerConnection = new RTCPeerConnection({
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' }
-                ]
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
             });
-            
-            // === الحل النهائي: انتظر حتى يكتمل التحميل ===
+
+            // ✅ الحل الجذري لمشكلة DOMException هنا
             state.peerConnection.ontrack = (event) => {
-                log(`🎬 استقبال ${event.track.kind}`);
+                log(`🎬 استلام تراك: ${event.track.kind}`);
                 
-                if (event.streams[0]) {
-                    state.stream = event.streams[0];
-                    
-                    // تأخير كبير قبل تعيين الفيديو
-                    setTimeout(() => {
-                        elements.remoteVideo.srcObject = null; // إفراغ أولاً
-                        
-                        setTimeout(() => {
-                            elements.remoteVideo.srcObject = state.stream;
-                            log('✅ تم تعيين تيار الفيديو');
-                            
-                            // تأخير أكبر قبل التشغيل
-                            setTimeout(() => {
-                                playVideoWithRetry();
-                            }, 1000); // تأخير 1 ثانية
-                            
-                        }, 500); // تأخير 500ms
-                        
-                    }, 1000); // تأخير 1 ثانية
+                // لا تقم بإعادة تعيين المصدر إذا كان هو نفسه
+                if (elements.remoteVideo.srcObject !== event.streams[0]) {
+                    elements.remoteVideo.srcObject = event.streams[0];
+                    log('✅ تم تعيين مصدر الفيديو');
+                    safePlayVideo();
                 }
             };
-            
+
             state.peerConnection.onicecandidate = (event) => {
-                if (event.candidate && state.socket) {
+                if (event.candidate) {
                     state.socket.send(JSON.stringify({
                         type: 'ice-candidate',
                         candidate: event.candidate,
-                        roomId: state.roomId
+                        roomId: state.roomId,
+                        targetId: data.senderId // الرد على المذيع المحدد
                     }));
                 }
             };
             
             state.peerConnection.onconnectionstatechange = () => {
-                if (state.peerConnection.connectionState === 'connected') {
-                    log('🎉 متصل بالمديع!');
+                const s = state.peerConnection.connectionState;
+                log(`حالة الاتصال: ${s}`);
+                if(s === 'connected') {
+                    updateStatus('🟢 متصل بالبث', 'connected');
+                    elements.overlay.style.display = 'none';
+                } else if (s === 'disconnected') {
+                    updateStatus('🔴 انقطع البث', 'disconnected');
+                    elements.overlay.style.display = 'flex';
+                    elements.overlayText.textContent = "انقطع البث";
                 }
             };
-        };
-        
-        // === 4. تشغيل الفيديو مع إعادة المحاولة ===
-        function playVideoWithRetry(retryCount = 0) {
-            if (retryCount >= 5) {
-                log('❌ فشل تشغيل الفيديو');
-                elements.loading.style.display = 'none';
-                elements.remoteVideo.style.display = 'block';
-                return;
-            }
+
+            await state.peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+            const answer = await state.peerConnection.createAnswer();
+            await state.peerConnection.setLocalDescription(answer);
             
-            if (!state.stream || !elements.remoteVideo.srcObject) {
-                log('⚠️ لا يوجد فيديو للعب');
-                return;
-            }
+            state.socket.send(JSON.stringify({
+                type: 'answer',
+                answer: answer,
+                roomId: state.roomId,
+                targetId: data.senderId
+            }));
+            log('📤 تم إرسال الموافقة (Answer)');
+        }
+
+        // ✅ دالة تشغيل آمنة تتوافق مع توصيات Chrome Developer
+        function safePlayVideo() {
+            const video = elements.remoteVideo;
             
-            elements.remoteVideo.play()
-                .then(() => {
-                    log('✅ بدأ تشغيل الفيديو!');
-                    elements.loading.style.display = 'none';
-                    elements.remoteVideo.style.display = 'block';
-                    updateStatus('🎥 تشاهد بثاً مباشراً!', 'green');
-                    state.isPlaying = true;
-                    
-                    // بدء الفيديو صامتاً
-                    elements.remoteVideo.volume = 0;
-                    setTimeout(() => {
-                        elements.remoteVideo.volume = 1;
-                    }, 1000);
+            // إذا كان الفيديو يعمل بالفعل، لا تفعل شيئاً
+            if (!video.paused) return;
+
+            // محاولة التشغيل
+            state.playPromise = video.play();
+
+            if (state.playPromise !== undefined) {
+                state.playPromise.then(_ => {
+                    log('▶️ بدأ تشغيل الفيديو بنجاح');
+                    elements.overlay.style.display = 'none';
                 })
                 .catch(error => {
-                    log(`⚠️ محاولة ${retryCount + 1}/5: ${error.message}`);
-                    
-                    // إعادة المحاولة بعد تأخير متزايد
-                    setTimeout(() => {
-                        playVideoWithRetry(retryCount + 1);
-                    }, (retryCount + 1) * 500);
+                    log(`⚠️ منع التشغيل التلقائي: ${error.name}`);
+                    // إذا فشل التشغيل التلقائي، أظهر زر للمستخدم
+                    elements.overlay.style.display = 'flex';
+                    elements.overlayText.innerHTML = `<button onclick="elements.remoteVideo.play(); this.parentElement.parentElement.style.display='none'">اضغط للتشغيل</button>`;
                 });
-        };
-        
-        // === 5. معالجة العرض من المديع ===
-        async function handleOffer(data) {
-            log('📨 استقبال عرض من المديع');
-            
-            if (!state.peerConnection) return;
-            
-            try {
-                // تعيين العرض أولاً
-                await state.peerConnection.setRemoteDescription(
-                    new RTCSessionDescription(data.offer)
-                );
-                log('✅ تم تعيين العرض');
-                
-                // انتظر قبل إنشاء الإجابة
-                setTimeout(async () => {
-                    try {
-                        const answer = await state.peerConnection.createAnswer();
-                        await state.peerConnection.setLocalDescription(answer);
-                        log('✅ تم إنشاء الإجابة');
-                        
-                        // انتظر قبل الإرسال
-                        setTimeout(() => {
-                            if (state.socket) {
-                                state.socket.send(JSON.stringify({
-                                    type: 'answer',
-                                    answer: answer,
-                                    roomId: state.roomId
-                                }));
-                                log('📤 تم إرسال الإجابة');
-                            }
-                        }, 300);
-                        
-                    } catch (error) {
-                        log(`❌ خطأ في الإجابة: ${error}`);
-                    }
-                }, 500);
-                
-            } catch (error) {
-                log(`❌ خطأ في العرض: ${error}`);
             }
-        };
-        
-        // === 6. معالجة ICE ===
-        function handleIceCandidate(data) {
-            if (state.peerConnection && data.candidate) {
-                // تأخير إضافة ICE
-                setTimeout(() => {
-                    state.peerConnection.addIceCandidate(
-                        new RTCIceCandidate(data.candidate)
-                    ).catch(e => log(`⚠️ ICE: ${e}`));
-                }, 200);
-            }
-        };
-        
-        // === 7. مغادرة البث ===
-        elements.leaveBtn.onclick = () => {
-            log('👋 مغادرة البث');
-            
-            if (state.peerConnection) {
-                state.peerConnection.close();
-                state.peerConnection = null;
-            }
-            
-            if (state.socket) {
-                state.socket.close();
-            }
-            
-            elements.remoteVideo.srcObject = null;
-            elements.remoteVideo.load();
-            elements.loading.style.display = 'none';
-            elements.remoteVideo.style.display = 'block';
-            
-            state = {
-                socket: null,
-                peerConnection: null,
-                roomId: '',
-                stream: null,
-                isPlaying: false
-            };
-            
-            elements.joinBtn.disabled = false;
-            elements.leaveBtn.disabled = true;
-            
-            updateStatus('🔴 غير متصل', 'red');
-        };
-        
-        // === 8. التحميل التلقائي ===
-        window.onload = () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const room = urlParams.get('room');
-            
-            if (room) {
-                elements.roomId.value = room;
-                setTimeout(() => elements.joinBtn.click(), 1000);
-            }
-            
-            log('✅ الصفحة جاهزة');
-        };
+        }
     </script>
 </body>
-    </html>
+</html>
