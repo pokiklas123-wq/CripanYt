@@ -1,119 +1,75 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>مشغل البث المباشر</title>
+    <title>مشغل الفيديو</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #000; font-family: Arial, sans-serif; }
-        #container { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        body, html { margin: 0; padding: 0; height: 100%; }
         video { width: 100%; height: 100%; object-fit: contain; background: #000; }
-        #status { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; text-align: center; z-index: 100; }
-        #error { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: red; text-align: center; display: none; z-index: 100; }
-        #controls { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; z-index: 50; }
-        #controls button { background: rgba(0, 0, 0, 0.7); color: white; border: 1px solid #444; padding: 10px 15px; cursor: pointer; border-radius: 5px; }
-        #controls button:hover { background: rgba(50, 50, 50, 0.7); }
+        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; }
     </style>
 </head>
 <body>
-    <div id="container">
-        <div id="status">جاري تحميل البث...</div>
-        <div id="error">
-            <div style="margin-bottom: 10px;">⚠️ خطأ في تحميل البث</div>
-            <button onclick="location.reload()">إعادة المحاولة</button>
-        </div>
-        <video id="video" autoplay playsinline controls></video>
-    </div>
+    <div id="loading">جاري تحميل البث...</div>
+    <video id="video" autoplay playsinline controls></video>
     
-    <div id="controls">
-        <button onclick="toggleFullscreen()">ملء الشاشة</button>
-        <button onclick="location.reload()">إعادة التحميل</button>
-        <button onclick="openInNewTab()">فتح في نافذة</button>
-    </div>
-
     <script>
+        // قراءة معرف الغرفة من الرابط
+        const params = new URLSearchParams(window.location.search);
+        const roomId = params.get('room') || 'live1';
+        
         const SERVER = 'wss://cripanyt.onrender.com';
-        let socket = null;
-        let peerConnection = null;
-        let roomId = '';
+        let socket;
+        let peerConnection;
         
-        async function init() {
-            const urlParams = new URLSearchParams(window.location.search);
-            roomId = urlParams.get('room');
-            
-            if (!roomId) {
-                showError('لم يتم تحديد معرف البث');
-                return;
-            }
-            
-            document.getElementById('status').textContent = `جاري الانضمام إلى البث ${roomId}...`;
-            connectToServer();
-        }
+        // الاتصال مباشرة عند تحميل الصفحة
+        connect();
         
-        function connectToServer() {
-            if (socket) socket.close();
-            
+        function connect() {
             socket = new WebSocket(SERVER);
             
             socket.onopen = () => {
-                const viewerId = 'player_' + Date.now();
                 socket.send(JSON.stringify({
                     type: 'join-room',
-                    roomId: roomId,
-                    viewerId: viewerId
+                    roomId: roomId
                 }));
             };
             
             socket.onmessage = async (event) => {
                 const data = JSON.parse(event.data);
                 
-                if (data.type === 'room-joined') {
-                    document.getElementById('status').textContent = 'بانتظار البث...';
-                }
-                else if (data.type === 'broadcast-offer') {
-                    document.getElementById('status').textContent = 'جاري تشغيل البث...';
-                    await setupWebRTC(data.sdp);
+                if (data.type === 'offer') {
+                    await handleOffer(data.sdp);
                 }
                 else if (data.type === 'ice-candidate') {
-                    if (peerConnection && peerConnection.remoteDescription) {
+                    if (peerConnection) {
                         peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
                     }
                 }
-                else if (data.type === 'broadcaster-left') {
-                    showError('انتهى البث المباشر');
-                }
-                else if (data.type === 'error') {
-                    showError(data.message);
+                else if (data.type === 'broadcast-ended') {
+                    document.getElementById('loading').textContent = 'انتهى البث';
                 }
             };
             
             socket.onclose = () => {
-                document.getElementById('status').textContent = 'انقطع الاتصال - جاري إعادة المحاولة...';
-                setTimeout(() => connectToServer(), 3000);
+                setTimeout(connect, 3000); // إعادة الاتصال بعد 3 ثواني
             };
         }
         
-        async function setupWebRTC(sdp) {
+        async function handleOffer(sdp) {
             if (peerConnection) peerConnection.close();
             
             peerConnection = new RTCPeerConnection({
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' }
-                ]
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
             });
             
             peerConnection.ontrack = (event) => {
                 const video = document.getElementById('video');
                 video.srcObject = event.streams[0];
-                document.getElementById('status').style.display = 'none';
-                video.play().catch(e => {
-                    document.getElementById('status').style.display = 'block';
-                    document.getElementById('status').textContent = 'اضغط على الفيديو للسماح بالتشغيل';
-                });
+                document.getElementById('loading').style.display = 'none';
             };
             
             peerConnection.onicecandidate = (event) => {
-                if (event.candidate && socket.readyState === WebSocket.OPEN) {
+                if (event.candidate) {
                     socket.send(JSON.stringify({
                         type: 'ice-candidate',
                         candidate: event.candidate,
@@ -122,47 +78,17 @@
                 }
             };
             
-            try {
-                await peerConnection.setRemoteDescription(
-                    new RTCSessionDescription({ type: 'offer', sdp: sdp })
-                );
-                
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
-                
-                socket.send(JSON.stringify({
-                    type: 'answer',
-                    answer: answer,
-                    roomId: roomId
-                }));
-            } catch (error) {
-                console.error('WebRTC error:', error);
-                showError('خطأ في تشغيل الفيديو');
-            }
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+            
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            
+            socket.send(JSON.stringify({
+                type: 'answer',
+                sdp: answer,
+                roomId: roomId
+            }));
         }
-        
-        function showError(msg) {
-            document.getElementById('status').style.display = 'none';
-            document.getElementById('error').style.display = 'block';
-            document.getElementById('error').firstChild.textContent = msg;
-        }
-        
-        function toggleFullscreen() {
-            const video = document.getElementById('video');
-            if (!document.fullscreenElement) {
-                video.requestFullscreen().catch(err => {
-                    console.error('Fullscreen error:', err);
-                });
-            } else {
-                document.exitFullscreen();
-            }
-        }
-        
-        function openInNewTab() {
-            window.open(`viewer.html?room=${roomId}`, '_blank');
-        }
-        
-        window.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
 </html>
