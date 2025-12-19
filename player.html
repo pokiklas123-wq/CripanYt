@@ -1,27 +1,29 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>مشغل الفيديو</title>
+    <title>مشغل البث</title>
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; }
-        video { width: 100%; height: 100%; object-fit: contain; background: #000; }
-        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; }
+        * { margin: 0; padding: 0; }
+        video { width: 100vw; height: 100vh; object-fit: contain; background: black; }
+        #status { 
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            color: white; font-size: 20px; background: rgba(0,0,0,0.7); padding: 20px;
+        }
     </style>
 </head>
 <body>
-    <div id="loading">جاري تحميل البث...</div>
+    <div id="status">جاري تحميل البث...</div>
     <video id="video" autoplay playsinline controls></video>
     
     <script>
         // قراءة معرف الغرفة من الرابط
-        const params = new URLSearchParams(window.location.search);
-        const roomId = params.get('room') || 'live1';
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomId = urlParams.get('room') || 'live1';
         
         const SERVER = 'wss://cripanyt.onrender.com';
         let socket;
         let peerConnection;
         
-        // الاتصال مباشرة عند تحميل الصفحة
         connect();
         
         function connect() {
@@ -45,13 +47,13 @@
                         peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
                     }
                 }
-                else if (data.type === 'broadcast-ended') {
-                    document.getElementById('loading').textContent = 'انتهى البث';
+                else if (data.type === 'broadcaster-left') {
+                    document.getElementById('status').textContent = 'انتهى البث';
                 }
             };
             
             socket.onclose = () => {
-                setTimeout(connect, 3000); // إعادة الاتصال بعد 3 ثواني
+                setTimeout(connect, 3000);
             };
         }
         
@@ -65,7 +67,8 @@
             peerConnection.ontrack = (event) => {
                 const video = document.getElementById('video');
                 video.srcObject = event.streams[0];
-                document.getElementById('loading').style.display = 'none';
+                document.getElementById('status').style.display = 'none';
+                video.play();
             };
             
             peerConnection.onicecandidate = (event) => {
