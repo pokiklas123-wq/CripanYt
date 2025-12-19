@@ -1,140 +1,153 @@
 <!DOCTYPE html>
-<html>
+<html lang="ar" dir="rtl">
 <head>
-    <title>المذيع</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مشاهدة البث المباشر - Ant Media</title>
     <style>
-        body { padding: 20px; font-family: Arial; }
-        video { width: 100%; max-width: 600px; background: black; }
-        input, button { padding: 10px; margin: 5px; font-size: 16px; }
-        #status { padding: 10px; margin: 10px 0; }
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f4f4f4; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        video { width: 100%; max-height: 70vh; background: #000; border-radius: 8px; margin-top: 15px; }
+        .controls { margin: 20px 0; }
+        input, button { padding: 12px 15px; margin: 5px; font-size: 16px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; }
+        input { width: 250px; }
+        button { background-color: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        #status { margin-top: 15px; padding: 10px; border-radius: 5px; }
+        .info { background-color: #e7f3ff; color: #004085; }
+        .error { background-color: #f8d7da; color: #721c24; }
     </style>
+    <!-- تضمين مكتبة hls.js من CDN لتشغيل HLS -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 </head>
 <body>
-    <h1>🎥 المذيع</h1>
-    
-    <div>
-        <input type="text" id="roomId" value="live1" placeholder="Room ID">
-        <button onclick="startBroadcast()">▶ بدء البث</button>
-        <button onclick="stopBroadcast()" style="display:none" id="stopBtn">⏹ إيقاف</button>
+    <div class="container">
+        <h1>🎥 مشغل البث المباشر (HLS)</h1>
+        <p>أدخل <strong>معرف البث (Stream ID)</strong> الذي تم إنشاؤه في سيرفر Ant Media.</p>
+        
+        <div class="controls">
+            <input type="text" id="streamIdInput" placeholder="مثال: stream1" value="stream1">
+            <button onclick="loadStream()">▶ تشغيل البث</button>
+            <button onclick="stopStream()">⏹ إيقاف</button>
+        </div>
+        
+        <div id="status" class="info">جاهز. أدخل معرف البث واضغط تشغيل.</div>
+        
+        <video id="videoPlayer" controls autoplay playsinline></video>
+        
+        <div style="margin-top: 20px; text-align: left; background: #f8f9fa; padding: 15px; border-radius: 5px;">
+            <h3>💡 معلومات للمشاهدين:</h3>
+            <p>بعد بدء البث، شارك رابط الـ HLS التالي مع المشاهدين:</p>
+            <code id="hlsUrlDisplay" style="display: block; word-break: break-all; padding: 10px; background: #eee; margin: 10px 0;">...</code>
+            <p><small>يمكن فتح هذا الرابط في أي مشغل يدعم HLS (مثل VLC) أو تضمينه في صفحات ويب أخرى.</small></p>
+        </div>
     </div>
-    
-    <div id="status">جاهز</div>
-    
-    <video id="localVideo" autoplay muted playsinline></video>
-    
-    <div>المشاهدون: <span id="viewerCount">0</span></div>
-    
+
     <script>
-        const SERVER = 'wss://cripanyt.onrender.com';
-        let localStream;
-        let peerConnections = [];
-        let socket;
-        let roomId;
+        // 🔧 1. ضع هنا عنوان سيرفرك ANT MEDIA
+        // استبدل ant-media-2kbz.onrender.com بعنوان سيرفرك الفعلي
+        const ANT_MEDIA_SERVER_BASE = "https://ant-media-2kbz.onrender.com";
+        const ANT_MEDIA_APP_NAME = "live"; // اسم التطبيق الافتراضي عادةً هو "live"
         
-        async function startBroadcast() {
-            roomId = document.getElementById('roomId').value.trim();
-            if (!roomId) return alert('أدخل معرف الغرفة');
+        let hlsPlayer = null; // كائن Hls
+        
+        function loadStream() {
+            const streamId = document.getElementById('streamIdInput').value.trim();
+            const statusDiv = document.getElementById('status');
+            const video = document.getElementById('videoPlayer');
             
-            try {
-                // الحصول على الكاميرا والصوت
-                localStream = await navigator.mediaDevices.getUserMedia({
-                    video: true,
-                    audio: true
+            if (!streamId) {
+                statusDiv.textContent = "⚠️ الرجاء إدخال معرف البث.";
+                statusDiv.className = "error";
+                return;
+            }
+            
+            // 🔗 2. بناء رابط ملف الـ M3U8 (HLS)
+            // الصيغة: https://[server]/[app-name]/streams/[streamId].m3u8
+            const hlsUrl = `${ANT_MEDIA_SERVER_BASE}/${ANT_MEDIA_APP_NAME}/streams/${streamId}.m3u8`;
+            
+            // عرض الرابط للمستخدم للمشاركة
+            document.getElementById('hlsUrlDisplay').textContent = hlsUrl;
+            
+            statusDiv.textContent = `⚙️ جاري تحميل البث: ${streamId}...`;
+            statusDiv.className = "info";
+            
+            // 3. إيقاف أي بث سابق
+            if (hlsPlayer) {
+                hlsPlayer.destroy();
+                hlsPlayer = null;
+            }
+            
+            // 4. التحقق من دعم المتصفح وتشغيل البث
+            if (Hls.isSupported()) {
+                // استخدام hls.js للمتصفحات غير السفاري
+                hlsPlayer = new Hls({
+                    enableWorker: false // قد يكون ضرورياً في بعض البيئات
+                });
+                hlsPlayer.loadSource(hlsUrl);
+                hlsPlayer.attachMedia(video);
+                
+                hlsPlayer.on(Hls.Events.MANIFEST_PARSED, function() {
+                    statusDiv.textContent = `✅ البث قيد التشغيل الآن: ${streamId}`;
+                    statusDiv.className = "info";
+                    video.play().catch(e => {
+                        statusDiv.textContent = "⚠️ التشغيل التلقائي محظور. الرجاء النقر على زر التشغيل في الفيديو.";
+                    });
                 });
                 
-                document.getElementById('localVideo').srcObject = localStream;
-                document.getElementById('status').textContent = 'جاري الاتصال...';
-                
-                // الاتصال بالسيرفر
-                socket = new WebSocket(SERVER);
-                
-                socket.onopen = () => {
-                    socket.send(JSON.stringify({
-                        type: 'create-room',
-                        roomId: roomId
-                    }));
-                };
-                
-                socket.onmessage = async (event) => {
-                    const data = JSON.parse(event.data);
-                    
-                    if (data.type === 'room-created') {
-                        document.getElementById('status').textContent = '✅ البث جاهز';
-                        document.querySelector('button').style.display = 'none';
-                        document.getElementById('stopBtn').style.display = 'inline-block';
-                    }
-                    else if (data.type === 'viewer-count') {
-                        document.getElementById('viewerCount').textContent = data.count;
-                        createPeerConnection();
-                    }
-                    else if (data.type === 'answer') {
-                        const pc = peerConnections[peerConnections.length - 1];
-                        if (pc) {
-                            await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+                hlsPlayer.on(Hls.Events.ERROR, function(event, data) {
+                    console.error("خطأ في HLS:", data);
+                    if (data.fatal) {
+                        switch(data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                statusDiv.textContent = "❌ خطأ في الشبكة. تأكد من أن البث نشط على السيرفر.";
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                statusDiv.textContent = "❌ خطأ في بيانات الفيديو.";
+                                hlsPlayer.recoverMediaError();
+                                break;
+                            default:
+                                statusDiv.textContent = "❌ خطأ غير معروف في تحميل البث.";
+                                hlsPlayer.destroy();
                         }
+                        statusDiv.className = "error";
                     }
-                    else if (data.type === 'ice-candidate') {
-                        const pc = peerConnections[peerConnections.length - 1];
-                        if (pc) {
-                            await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-                        }
-                    }
-                };
-                
-            } catch (error) {
-                alert('خطأ: ' + error.message);
-            }
-        }
-        
-        function createPeerConnection() {
-            const pc = new RTCPeerConnection({
-                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-            });
-            
-            // إضافة تيار الوسائط
-            localStream.getTracks().forEach(track => {
-                pc.addTrack(track, localStream);
-            });
-            
-            // إرسال ICE candidates
-            pc.onicecandidate = (event) => {
-                if (event.candidate && socket.readyState === 1) {
-                    socket.send(JSON.stringify({
-                        type: 'ice-candidate',
-                        candidate: event.candidate,
-                        roomId: roomId
-                    }));
-                }
-            };
-            
-            // إنشاء العرض وإرساله
-            pc.createOffer()
-                .then(offer => pc.setLocalDescription(offer))
-                .then(() => {
-                    socket.send(JSON.stringify({
-                        type: 'offer',
-                        sdp: pc.localDescription,
-                        roomId: roomId
-                    }));
                 });
-            
-            peerConnections.push(pc);
+                
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                // للمتصفحات التي تدعم HLS natively (مثل Safari على iOS/Mac)
+                video.src = hlsUrl;
+                video.addEventListener('loadedmetadata', function() {
+                    statusDiv.textContent = `✅ البث قيد التشغيل (Safari): ${streamId}`;
+                    statusDiv.className = "info";
+                    video.play();
+                });
+            } else {
+                statusDiv.textContent = "❌ المتصفح لا يدعم تشغيل HLS.";
+                statusDiv.className = "error";
+            }
         }
         
-        function stopBroadcast() {
-            if (localStream) {
-                localStream.getTracks().forEach(track => track.stop());
+        function stopStream() {
+            const statusDiv = document.getElementById('status');
+            const video = document.getElementById('videoPlayer');
+            
+            if (hlsPlayer) {
+                hlsPlayer.destroy();
+                hlsPlayer = null;
             }
-            
-            if (socket) {
-                socket.close();
-            }
-            
-            peerConnections.forEach(pc => pc.close());
-            peerConnections = [];
-            
-            location.reload();
+            video.src = "";
+            statusDiv.textContent = "⏹ تم إيقاف البث.";
+            statusDiv.className = "info";
+            document.getElementById('hlsUrlDisplay').textContent = "...";
         }
+        
+        // تحميل البث تلقائياً عند فتح الصفحة إذا كان هناك معرف افتراضي
+        window.onload = function() {
+            if(document.getElementById('streamIdInput').value) {
+                //loadStream(); // يمكن إلغاء التعليق إذا أردت التشغيل التلقائي
+            }
+        };
     </script>
 </body>
 </html>
