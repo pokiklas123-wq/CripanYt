@@ -3,9 +3,9 @@
 <head>
     <title>المذيع</title>
     <style>
-        body { font-family: Arial; padding: 20px; }
-        video { width: 100%; max-width: 600px; background: #000; }
-        button { padding: 10px 20px; margin: 5px; }
+        body { padding: 20px; font-family: Arial; }
+        video { width: 100%; max-width: 600px; background: black; }
+        input, button { padding: 10px; margin: 5px; font-size: 16px; }
         #status { padding: 10px; margin: 10px 0; }
     </style>
 </head>
@@ -14,27 +14,25 @@
     
     <div>
         <input type="text" id="roomId" value="live1" placeholder="Room ID">
-        <button id="startBtn">بدء البث</button>
-        <button id="stopBtn" disabled>إيقاف</button>
+        <button onclick="startBroadcast()">▶ بدء البث</button>
+        <button onclick="stopBroadcast()" style="display:none" id="stopBtn">⏹ إيقاف</button>
     </div>
     
     <div id="status">جاهز</div>
     
     <video id="localVideo" autoplay muted playsinline></video>
+    
     <div>المشاهدون: <span id="viewerCount">0</span></div>
     
     <script>
         const SERVER = 'wss://cripanyt.onrender.com';
         let localStream;
-        let peerConnections = new Map();
+        let peerConnections = [];
         let socket;
         let roomId;
         
-        document.getElementById('startBtn').onclick = startBroadcast;
-        document.getElementById('stopBtn').onclick = stopBroadcast;
-        
         async function startBroadcast() {
-            roomId = document.getElementById('roomId').value;
+            roomId = document.getElementById('roomId').value.trim();
             if (!roomId) return alert('أدخل معرف الغرفة');
             
             try {
@@ -55,29 +53,28 @@
                         type: 'create-room',
                         roomId: roomId
                     }));
-                    document.getElementById('status').textContent = 'البث جاهز';
-                    document.getElementById('startBtn').disabled = true;
-                    document.getElementById('stopBtn').disabled = false;
                 };
                 
                 socket.onmessage = async (event) => {
                     const data = JSON.parse(event.data);
                     
                     if (data.type === 'room-created') {
-                        console.log('✅ Room created');
+                        document.getElementById('status').textContent = '✅ البث جاهز';
+                        document.querySelector('button').style.display = 'none';
+                        document.getElementById('stopBtn').style.display = 'inline-block';
                     }
-                    else if (data.type === 'viewer-joined') {
-                        document.getElementById('viewerCount').textContent = data.total;
-                        createPeerConnection(data.viewerId);
+                    else if (data.type === 'viewer-count') {
+                        document.getElementById('viewerCount').textContent = data.count;
+                        createPeerConnection();
                     }
                     else if (data.type === 'answer') {
-                        const pc = peerConnections.get(data.viewerId);
+                        const pc = peerConnections[peerConnections.length - 1];
                         if (pc) {
                             await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
                         }
                     }
                     else if (data.type === 'ice-candidate') {
-                        const pc = peerConnections.get(data.viewerId);
+                        const pc = peerConnections[peerConnections.length - 1];
                         if (pc) {
                             await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
                         }
@@ -85,11 +82,11 @@
                 };
                 
             } catch (error) {
-                alert('Error: ' + error.message);
+                alert('خطأ: ' + error.message);
             }
         }
         
-        function createPeerConnection(viewerId) {
+        function createPeerConnection() {
             const pc = new RTCPeerConnection({
                 iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
             });
@@ -121,7 +118,7 @@
                     }));
                 });
             
-            peerConnections.set(viewerId, pc);
+            peerConnections.push(pc);
         }
         
         function stopBroadcast() {
@@ -134,12 +131,9 @@
             }
             
             peerConnections.forEach(pc => pc.close());
-            peerConnections.clear();
+            peerConnections = [];
             
-            document.getElementById('startBtn').disabled = false;
-            document.getElementById('stopBtn').disabled = true;
-            document.getElementById('status').textContent = 'متوقف';
-            document.getElementById('viewerCount').textContent = '0';
+            location.reload();
         }
     </script>
 </body>
