@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>منصة البث المباشر</title>
+    <!-- نفس الأنماط تماماً -->
     <style>
         * { box-sizing: border-box; }
         body {
@@ -93,53 +94,36 @@
             <button id="btnStart"><span style="margin-left:8px;">▶</span> بدء البث المباشر</button>
             <button id="btnStop" disabled><span style="margin-left:8px;">⏹</span> إيقاف البث</button>
         </div>
-        <div id="status">✅ النظام جاهز. يرجى البدء بفحص الأجهزة أولاً.</div>
+        <div id="status">⚙️ جاري التهيئة...</div>
         <div class="log-header">
             <span>📋 سجل التشغيل التفصيلي:</span>
             <button id="btnClearLog">🗑️ مسح السجل</button>
         </div>
         <div id="log">[تم تحميل الواجهة بنجاح]</div>
         <div class="footer">
-            <p>مشروع تطوير منصة تعليمية | الإصدار النهائي</p>
+            <p>مشروع تطوير منصة تعليمية | الإصدار البسيط</p>
         </div>
     </div>
 
-    <!-- المكتبات الأساسية - الإصدار البسيط -->
+    <!-- المكتبات الأساسية -->
     <script src="https://cdn.jsdelivr.net/npm/webrtc-adapter@latest"></script>
     
     <!-- الكود الرئيسي -->
     <script>
-        // ========== إعدادات الخادم ==========
+        // ========== الإعدادات البسيطة ==========
         const CONFIG = {
-            // رابط خادم WebSocket - تأكد من أن الخادم يعمل
             SERVER_URL: "wss://cripanyt-production.up.railway.app/live/websocket",
-            // إذا لم يعمل wss:// جرب https://
+            // إذا لم يعمل wss://، جرب هذا:
             // SERVER_URL: "https://cripanyt-production.up.railway.app/live/websocket",
-            
-            STREAM_ID: "test_" + Math.floor(Math.random() * 10000),
-            MEDIA_CONSTRAINTS: {
-                video: { 
-                    width: { ideal: 640 }, 
-                    height: { ideal: 480 }, 
-                    facingMode: "user" 
-                },
-                audio: { 
-                    echoCancellation: true, 
-                    noiseSuppression: true 
-                }
-            },
-            ICE_SERVERS: [ 
-                { urls: "stun:stun.l.google.com:19302" },
-                { urls: "stun:stun1.l.google.com:19302" }
-            ]
+            STREAM_ID: "test_stream_" + Math.floor(Math.random() * 1000)
         };
 
-        // ========== المتغيرات العامة ==========
+        // المتغيرات الأساسية
         let webRTCAdaptor = null;
         let localStream = null;
         let isBroadcasting = false;
 
-        // ========== ربط عناصر الصفحة ==========
+        // عناصر DOM
         const statusEl = document.getElementById('status');
         const logEl = document.getElementById('log');
         const localVideo = document.getElementById('localVideo');
@@ -148,90 +132,132 @@
         const btnStop = document.getElementById('btnStop');
         const btnClearLog = document.getElementById('btnClearLog');
 
-        // ========== دوال المساعدة ==========
+        // ========== دوال المساعدة البسيطة ==========
         function addLog(message) {
             const time = new Date().toLocaleTimeString('ar-EG');
-            const logEntry = `[${time}] ${message}`;
-            logEl.innerHTML += logEntry + "<br>";
+            logEl.innerHTML += `[${time}] ${message}<br>`;
             logEl.scrollTop = logEl.scrollHeight;
-            console.log(logEntry);
         }
         
         function updateStatus(message, type = "info") {
             statusEl.textContent = message;
             const colors = { info: "#4FC3F7", success: "#4CAF50", error: "#F44336", warning: "#FF9800" };
             statusEl.style.borderRightColor = colors[type] || colors.info;
-            statusEl.style.color = colors[type] || colors.info;
-        }
-        
-        function clearLog() {
-            logEl.innerHTML = "[تم مسح سجل التشغيل]<br>";
-            addLog("تم مسح سجل التشغيل يدويًا.");
         }
 
-        // ========== تحميل المكتبة من Railway ==========
-        function loadWebRTCAdaptor() {
-            addLog("📦 جاري تحميل مكتبة WebRTC Adaptor...");
+        // ========== الحل 1: استخدام المكتبة من CDN (الأضمن) ==========
+        function loadLibraryFromCDN() {
+            addLog("📦 جاري تحميل المكتبة من CDN...");
             
             return new Promise((resolve, reject) => {
                 const script = document.createElement('script');
-                // ⚡ هذا هو الرابط الصحيح للمكتبة المجمعة
-                script.src = 'https://cripanyt-production.up.railway.app/live/js/webrtc_adaptor-d838e473.js';
+                // مكتبة Ant Media الرسمية من jsDelivr
+                script.src = 'https://cdn.jsdelivr.net/npm/ant-media-web@latest/dist/antmedia-webrtc.umd.js';
                 
                 script.onload = function() {
-                    setTimeout(() => {
-                        if (typeof WebRTCAdaptor !== 'undefined') {
-                            addLog("✅ تم تحميل مكتبة WebRTC Adaptor بنجاح");
-                            updateStatus("✅ المكتبة محملة", "info");
-                            resolve(true);
-                        } else {
-                            addLog("⚠️ المكتبة محملة ولكن WebRTCAdaptor غير معرّف");
-                            reject("WebRTCAdaptor غير معرّف");
-                        }
-                    }, 100);
+                    // هذه المكتبة تُعرّف AntMediaWebRTC.WebRTCAdaptor
+                    if (typeof AntMediaWebRTC !== 'undefined' && AntMediaWebRTC.WebRTCAdaptor) {
+                        window.WebRTCAdaptor = AntMediaWebRTC.WebRTCAdaptor;
+                        addLog("✅ تم تحميل المكتبة من CDN بنجاح");
+                        resolve(true);
+                    } else {
+                        reject("المكتبة لم تعرّف WebRTCAdaptor");
+                    }
                 };
                 
-                script.onerror = function() {
-                    addLog("❌ فشل تحميل المكتبة من Railway");
-                    reject("فشل التحميل");
-                };
-                
+                script.onerror = reject;
                 document.head.appendChild(script);
             });
         }
 
-        // ========== تهيئة الصفحة ==========
+        // ========== الحل 2: تحميل من Railway مع معالجة خاصة ==========
+        function loadLibraryFromRailway() {
+            addLog("🔄 جاري تحميل المكتبة من Railway...");
+            
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cripanyt-production.up.railway.app/live/js/webrtc_adaptor-d838e473.js';
+                
+                script.onload = function() {
+                    // بعد التحميل، نبحث عن الكائن بأي اسم
+                    setTimeout(() => {
+                        // تحقق من عدة أسماء محتملة
+                        if (typeof WebRTCAdaptor !== 'undefined') {
+                            addLog("✅ تم العثور على WebRTCAdaptor مباشرة");
+                            resolve(true);
+                        } 
+                        // إذا كان الملف يُصدّر الكائن باسم W (كما رأينا في الكود السابق)
+                        else if (typeof W !== 'undefined') {
+                            window.WebRTCAdaptor = W;
+                            addLog("✅ تم العثور على الكائن باسم 'W' وتحويله إلى WebRTCAdaptor");
+                            resolve(true);
+                        }
+                        else {
+                            reject("لم يتم العثور على الكائن");
+                        }
+                    }, 300);
+                };
+                
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        // ========== محاولة تحميل المكتبة ==========
+        async function loadLibrary() {
+            try {
+                // أولاً جرب CDN (الأكثر موثوقية)
+                await loadLibraryFromCDN();
+                return true;
+            } catch (cdnError) {
+                addLog("❌ CDN لم يعمل، جرب Railway...");
+                
+                try {
+                    // ثانياً جرب Railway
+                    await loadLibraryFromRailway();
+                    return true;
+                } catch (railwayError) {
+                    addLog("❌ جميع المحاولات فشلت");
+                    return false;
+                }
+            }
+        }
+
+        // ========== التهيئة الرئيسية ==========
         async function init() {
             addLog("🔧 بدء تهيئة النظام...");
             
-            // ربط أحداث الأزرار
+            // ربط الأزرار
             btnDevices.addEventListener('click', listDevices);
             btnStart.addEventListener('click', startBroadcast);
             btnStop.addEventListener('click', stopBroadcast);
-            btnClearLog.addEventListener('click', clearLog);
+            btnClearLog.addEventListener('click', () => {
+                logEl.innerHTML = "[تم مسح السجل]<br>";
+                addLog("تم مسح السجل");
+            });
             
             // تحميل المكتبة
-            try {
-                await loadWebRTCAdaptor();
+            updateStatus("📦 جاري تحميل المكتبة...", "info");
+            const libraryLoaded = await loadLibrary();
+            
+            if (libraryLoaded && typeof WebRTCAdaptor !== 'undefined') {
                 updateStatus("✅ النظام جاهز للعمل", "success");
                 addLog(`🌐 جاهز للاتصال: ${CONFIG.SERVER_URL}`);
-                addLog(`📼 معرف البث: ${CONFIG.STREAM_ID}`);
                 btnStart.disabled = false;
-            } catch (error) {
+            } else {
                 updateStatus("❌ فشل تحميل المكتبة", "error");
-                addLog(`❌ الخطأ: ${error}`);
-                addLog("💡 تأكد من أن خادم Railway يعمل");
+                addLog("💡 افتح أدوات المطور (F12) → Console → اكتب 'WebRTCAdaptor' أو 'W'");
             }
         }
 
         // ========== فحص الأجهزة ==========
         async function listDevices() {
             updateStatus("🔍 جاري فحص الأجهزة...", "info");
-            addLog("--- بدء فحص الأجهزة ---");
+            addLog("--- فحص الأجهزة ---");
             
             try {
-                const tempStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                tempStream.getTracks().forEach(track => track.stop());
+                const stream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
+                stream.getTracks().forEach(track => track.stop());
                 
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 let hasVideo = false, hasAudio = false;
@@ -239,15 +265,12 @@
                 devices.forEach(device => {
                     const icon = device.kind === 'videoinput' ? '📹' : 
                                  device.kind === 'audioinput' ? '🎤' : '📟';
-                    addLog(`${icon} ${device.kind}: ${device.label || 'جهاز غير معرّف'}`);
+                    addLog(`${icon} ${device.kind}: ${device.label || 'غير معرّف'}`);
                     if (device.kind === 'videoinput') hasVideo = true;
                     if (device.kind === 'audioinput') hasAudio = true;
                 });
                 
-                if (!hasVideo) addLog("⚠️ تحذير: لم يتم العثور على كاميرا!");
-                if (!hasAudio) addLog("⚠️ تحذير: لم يتم العثور على ميكروفون!");
-                
-                updateStatus(hasVideo && hasAudio ? "✅ جاهز للبث" : "⚠️ بعض الأجهزة مفقودة", 
+                updateStatus(hasVideo && hasAudio ? "✅ جاهز للبث" : "⚠️ أجهزة ناقصة", 
                            hasVideo && hasAudio ? "success" : "warning");
                 btnStart.disabled = !(hasVideo && hasAudio);
                 
@@ -257,91 +280,62 @@
             }
         }
 
-        // ========== بدء البث الحقيقي ==========
+        // ========== بدء البث ==========
         async function startBroadcast() {
             if (isBroadcasting) {
-                updateStatus("⚠️ البث يعمل بالفعل!", "warning");
+                updateStatus("⚠️ البث يعمل بالفعل", "warning");
                 return;
             }
             
-            if (typeof WebRTCAdaptor === 'undefined') {
-                updateStatus("❌ المكتبة غير محملة", "error");
-                return;
-            }
-            
-            updateStatus("🚀 بدء إجراءات البث...", "info");
-            addLog("--- بدء تشغيل البث ---");
+            updateStatus("🚀 بدء البث...", "info");
+            addLog("--- بدء البث ---");
             
             btnStart.disabled = true;
             btnStop.disabled = false;
             
             try {
-                updateStatus("📷 جاري تفعيل الكاميرا...", "info");
-                localStream = await navigator.mediaDevices.getUserMedia(CONFIG.MEDIA_CONSTRAINTS);
-                
-                const videoTrack = localStream.getVideoTracks()[0];
-                const audioTrack = localStream.getAudioTracks()[0];
-                addLog(`✅ تم تفعيل الوسائط: ${videoTrack.label || 'كاميرا'} & ${audioTrack.label || 'ميكروفون'}`);
+                // الحصول على الكاميرا والصوت
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 640, height: 480, facingMode: "user" },
+                    audio: { echoCancellation: true }
+                });
                 
                 localVideo.srcObject = localStream;
-                updateStatus("🎥 المعاينة تعمل، جاري الاتصال...", "info");
+                updateStatus("🎥 المعاينة تعمل...", "info");
+                addLog("✅ تم تفعيل الكاميرا والصوت");
                 
-                addLog(`🔌 محاولة الاتصال: ${CONFIG.SERVER_URL}`);
-                
-                // إنشاء كائن WebRTCAdaptor
+                // إنشاء اتصال WebRTC
                 webRTCAdaptor = new WebRTCAdaptor({
                     websocket_url: CONFIG.SERVER_URL,
-                    mediaConstraints: CONFIG.MEDIA_CONSTRAINTS,
-                    peerconnection_config: { iceServers: CONFIG.ICE_SERVERS },
-                    sdp_constraints: { 
-                        OfferToReceiveAudio: false, 
-                        OfferToReceiveVideo: false 
+                    mediaConstraints: { video: true, audio: true },
+                    peerconnection_config: {
+                        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
                     },
                     localVideoId: "localVideo",
                     debug: true,
                     
-                    callback: (info, obj) => {
-                        addLog(`📞 [Callback] ${info}`);
-                        
-                        switch(info) {
-                            case "initialized":
-                                updateStatus("🌐 متصل بالخادم...", "info");
-                                webRTCAdaptor.publish(CONFIG.STREAM_ID);
-                                addLog(`🚀 طلب نشر البث: ${CONFIG.STREAM_ID}`);
-                                break;
-                                
-                            case "publish_started":
-                                isBroadcasting = true;
-                                updateStatus("✅ البث المباشر يعمل!", "success");
-                                addLog("🎉 البث يعمل الآن ويمكن مشاهدته!");
-                                addLog("👉 افتح لوحة التحكم للتحقق من البث النشط");
-                                break;
-                                
-                            case "publish_finished":
-                                isBroadcasting = false;
-                                updateStatus("⏹ توقف البث", "info");
-                                resetUI();
-                                break;
+                    callback: (info) => {
+                        addLog(`📞 ${info}`);
+                        if (info === "initialized") {
+                            updateStatus("🌐 متصل بالخادم...", "info");
+                            webRTCAdaptor.publish(CONFIG.STREAM_ID);
+                            addLog(`📤 نشر البث: ${CONFIG.STREAM_ID}`);
+                        } else if (info === "publish_started") {
+                            isBroadcasting = true;
+                            updateStatus("✅ البث يعمل بنجاح!", "success");
+                            addLog("🎉 البث يعمل الآن!");
                         }
                     },
                     
-                    callbackError: (error, message) => {
-                        addLog(`❌ [Error Callback] ${error} - ${message || 'لا تفاصيل'}`);
+                    callbackError: (error) => {
+                        addLog(`❌ خطأ: ${error}`);
                         updateStatus(`خطأ: ${error}`, "error");
-                        
-                        // اقتراحات للأخطاء الشائعة
-                        if (error === "websocket_closed" || error === "WebSocketNotConnected") {
-                            addLog("💡 تأكد من أن خادم Ant Media يعمل على Railway");
-                            addLog("💡 جرب تغيير wss:// إلى https:// في SERVER_URL");
-                        }
                     }
                 });
                 
-                addLog("✅ تم إنشاء كائن WebRTCAdaptor");
-                
             } catch (err) {
-                addLog(`❌ فشل تشغيل البث: ${err.message}`);
-                updateStatus(`❌ فشل: ${err.name}`, "error");
+                addLog(`❌ فشل بدء البث: ${err.message}`);
+                updateStatus("❌ فشل بدء البث", "error");
                 resetUI();
             }
         }
@@ -354,20 +348,16 @@
             }
             
             addLog("--- إيقاف البث ---");
-            updateStatus("⏹ جاري إيقاف البث...", "info");
+            updateStatus("⏹ إيقاف البث...", "info");
             
             if (webRTCAdaptor) {
                 webRTCAdaptor.stop(CONFIG.STREAM_ID);
                 webRTCAdaptor.close();
                 webRTCAdaptor = null;
-                addLog("✅ تم إيقاف الاتصال بالخادم");
             }
             
             if (localStream) {
-                localStream.getTracks().forEach(track => {
-                    track.stop();
-                    addLog(`⏹ تم إيقاف مسار ${track.kind}`);
-                });
+                localStream.getTracks().forEach(track => track.stop());
                 localStream = null;
             }
             
@@ -377,21 +367,13 @@
             resetUI();
         }
 
-        // ========== إعادة تعيين واجهة المستخدم ==========
         function resetUI() {
             btnStart.disabled = false;
             btnStop.disabled = true;
         }
 
-        // ========== بدء التشغيل ==========
+        // بدء التطبيق
         window.addEventListener('DOMContentLoaded', init);
-        
-        window.addEventListener('beforeunload', (e) => {
-            if (isBroadcasting) {
-                e.preventDefault();
-                e.returnValue = 'يوجد بث قيد التشغيل. هل تريد المغادرة؟';
-            }
-        });
     </script>
 </body>
-</html>
+    </html>
