@@ -1,126 +1,183 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>مشاهدة البث - Ant Media</title>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <meta charset="utf-8">
+    <title>البث المباشر - إصدار محسّن</title>
+    <style>
+        body { margin:0; padding:20px; background:#111; text-align:center; font-family:Arial; color:#fff; }
+        #localVideo { width:100%; max-width:640px; background:#222; border-radius:10px; margin:10px auto; }
+        button { padding:15px 25px; margin:10px; font-size:16px; border:none; border-radius:8px; cursor:pointer; }
+        #status { margin:15px; padding:12px; background:#333; border-radius:6px; min-height:24px; }
+        #log { text-align:left; margin:20px auto; padding:15px; background:#1a1a1a; border-radius:8px; max-width:800px; font-family:monospace; font-size:12px; white-space:pre-wrap; max-height:200px; overflow-y:auto; }
+    </style>
+    <script src="https://ant-media-2kbz.onrender.com/live/js/webrtc_adaptor.js"></script>
 </head>
-<body style="text-align: center; padding: 20px;">
-    <h1>🎥 مشغل البث - Ant Media</h1>
-    
-    <div>
-        <input type="text" id="streamId" placeholder="Stream ID" value="myStream123">
-        <button onclick="startPlayback()">▶ تشغيل</button>
-        <button onclick="stopPlayback()">⏹ إيقاف</button>
-    </div>
-    
-    <div id="status">🚦 جاهز</div>
-    
-    <!-- الخطوة الجديدة: زر فحص الرابط -->
-    <div style="margin: 20px;">
-        <button onclick="checkStream()">🔍 فحص البث على السيرفر</button>
-        <div id="checkResult"></div>
-    </div>
-    
-    <video id="videoPlayer" controls width="80%" style="margin-top: 20px;"></video>
-    
+<body>
+    <h3>🎥 بث مباشر عبر WebView - (نسخة تشخيص)</h3>
+    <video id="localVideo" autoplay playsinline muted></video>
+    <br>
+    <button onclick="listDevices()" style="background:#FF9800;">🔍 فحص الأجهزة</button>
+    <button onclick="startBroadcast()" style="background:#4CAF50;">▶ بدء البث</button>
+    <button onclick="stopBroadcast()" style="background:#f44336;">⏹ إيقاف البث</button>
+    <p id="status">✅ جاهز للتشغيل</p>
+    <div id="log">سجل التشغيل:<br></div>
+
     <script>
-        const SERVER = 'https://ant-media-2kbz.onrender.com';
-        const APP = 'live';
-        let hls = null;
+        const SERVER_URL = "https://ant-media-2kbz.onrender.com/live/websocket";
+        const STREAM_ID = "test_stream_" + Math.floor(Math.random() * 1000);
         
-        // دالة جديدة: فحص الرابط قبل التشغيل
-        async function checkStream() {
-            const streamId = document.getElementById('streamId').value;
-            const url = `${SERVER}/${APP}/streams/${streamId}.m3u8`;
-            
-            document.getElementById('checkResult').innerHTML = 
-                `🔗 جارٍ فحص الرابط: <br><small>${url}</small><br>⏳ ...`;
-            
+        let webRTCAdaptor = null;
+        let localStream = null;
+        const statusEl = document.getElementById('status');
+        const logEl = document.getElementById('log');
+        const localVideo = document.getElementById('localVideo');
+
+        // ========== وظيفة تسجيل الأحداث ==========
+        function addLog(message) {
+            const time = new Date().toLocaleTimeString();
+            logEl.innerHTML += `[${time}] ${message}<br>`;
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(message);
+        }
+
+        // ========== فحص أجهزة الكاميرا والميكروفون المتاحة ==========
+        async function listDevices() {
+            addLog("--- فحص الأجهزة المتاحة ---");
             try {
-                const response = await fetch(url, { method: 'HEAD' });
-                const resultDiv = document.getElementById('checkResult');
-                
-                if (response.ok) {
-                    resultDiv.innerHTML = 
-                        `✅ الرابط موجود ويمكن الوصول إليه! <br>
-                         يمكنك الآن الضغط على "تشغيل".<br>
-                         <small>الحالة: ${response.status} ${response.statusText}</small>`;
-                } else {
-                    resultDiv.innerHTML = 
-                        `❌ الرابط موجود لكن هناك خطأ (${response.status}).<br>
-                         <strong>التفسير: البث قد لا يكون نشطاً حالياً.</strong><br>
-                         تأكد من أن المذيع يبث الآن وأن Stream ID صحيح.`;
-                }
-            } catch (error) {
-                document.getElementById('checkResult').innerHTML = 
-                    `🚫 <strong>لا يمكن الوصول إلى الرابط!</strong><br>
-                     الأسباب المحتملة:<br>
-                     1. السيرفر متوقف (Render.com مجاني)<br>
-                     2. اسم الـ Stream ID غير صحيح<br>
-                     3. مشكلة في الشبكة<br>
-                     <small>الخطأ: ${error.message}</small>`;
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                devices.forEach(device => {
+                    addLog(`📟 ${device.kind}: ${device.label || 'اسم غير متاح'} (ID: ${device.deviceId})`);
+                });
+                statusEl.textContent = "تم فحص الأجهزة، انظر السجل";
+            } catch (err) {
+                addLog(`❌ خطأ في فحص الأجهزة: ${err.message}`);
             }
         }
-        
-        function startPlayback() {
-            const streamId = document.getElementById('streamId').value;
-            const video = document.getElementById('videoPlayer');
-            const url = `${SERVER}/${APP}/streams/${streamId}.m3u8`;
+
+        // ========== بدء البث (الإصدار المحسّن) ==========
+        async function startBroadcast() {
+            statusEl.textContent = "جاري طلب الكاميرا والصوت...";
+            addLog("--- محاولة بدء البث ---");
             
-            document.getElementById('status').innerHTML = `⚙️ جاري التشغيل...`;
-            
-            if (Hls.isSupported()) {
-                if (hls) hls.destroy();
+            try {
+                // 1. طلب الوسائط بإعدادات مفصلة للصوت (للتغلب على مشاكل التشغيل)
+                const mediaConstraints = {
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        frameRate: { ideal: 24 }
+                    },
+                    audio: {
+                        echoCancellation: false,   // إيقاف إلغاء الصدى (قد يسبب مشاكل)
+                        noiseSuppression: false,   // إيقاف كتم الضوضاء
+                        autoGainControl: false,    // إيقاف التحكم التلقائي في مستوى الصوت
+                        channelCount: 1,           // ميكروفون أحادي (أبسط)
+                        sampleRate: 44100,         // تردد أخذ عينات قياسي
+                        sampleSize: 16             // حجم العينة قياسي
+                    }
+                };
                 
-                hls = new Hls();
-                hls.loadSource(url);
-                hls.attachMedia(video);
+                addLog("طلب الوسائط بالإعدادات التالية: " + JSON.stringify(mediaConstraints));
+                localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
                 
-                hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                    video.play();
-                    document.getElementById('status').innerHTML = 
-                        `✅ البث قيد التشغيل الآن`;
-                });
+                // 2. عرض الفيديو المحلي
+                localVideo.srcObject = localStream;
+                const videoTrack = localStream.getVideoTracks()[0];
+                const audioTrack = localStream.getAudioTracks()[0];
+                addLog(`✅ تم الحصول على الوسائط بنجاح`);
+                addLog(`   كاميرا: ${videoTrack.label || 'غير معروف'}`);
+                addLog(`   ميكروفون: ${audioTrack.label || 'غير معروف'}`);
+                addLog(`   حالة الميكروفون: ${audioTrack.enabled ? 'مفعل' : 'معطل'}`);
+                addLog(`   حالة الصوت: ${audioTrack.muted ? 'مكتوم' : 'غير مكتوم'}`);
                 
-                hls.on(Hls.Events.ERROR, (event, data) => {
-                    console.error('خطأ HLS:', data);
+                statusEl.textContent = "الكاميرا جاهزة، جاري الاتصال بالخادم...";
+                
+                // 3. الاتصال بخادم Ant Media
+                webRTCAdaptor = new WebRTCAdaptor({
+                    websocket_url: SERVER_URL,
+                    mediaConstraints: { video: true, audio: true },
+                    peerconnection_config: { 
+                        iceServers: [
+                            { urls: "stun:stun.l.google.com:19302" },
+                            { urls: "stun:stun1.l.google.com:19302" }
+                        ] 
+                    },
+                    sdp_constraints: { 
+                        OfferToReceiveAudio: false, 
+                        OfferToReceiveVideo: false 
+                    },
+                    localVideoId: "localVideo",
+                    debug: true,  // تفعيل وضع التصحيح
                     
-                    if (data.fatal) {
-                        let msg = '❌ خطأ جسيم: ';
-                        switch(data.type) {
-                            case Hls.ErrorTypes.NETWORK_ERROR:
-                                msg += 'مشكلة شبكة. تأكد أن البث <strong>نشط حالياً</strong> وأنك تستخدم الـ Stream ID الصحيح.';
-                                // محاولة إعادة الاتصال تلقائياً
-                                setTimeout(() => hls.loadSource(url), 3000);
-                                break;
-                            case Hls.ErrorTypes.MEDIA_ERROR:
-                                msg += 'مشكلة في ملف الفيديو. جارٍ الإصلاح...';
-                                hls.recoverMediaError();
-                                break;
-                            default:
-                                msg += 'لا يمكن استعادة الاتصال.';
-                                hls.destroy();
+                    callback: (info, obj) => {
+                        addLog(`📞 callback: ${info}`);
+                        if (info === "initialized") {
+                            statusEl.textContent = "متصل، جاري بدء البث...";
+                            webRTCAdaptor.publish(STREAM_ID);
+                            addLog(`🚀 إرسال طلب البث مع ID: ${STREAM_ID}`);
+                        } else if (info === "publish_started") {
+                            statusEl.textContent = "✅ البث المباشر يعمل بنجاح!";
+                            statusEl.style.color = "#4CAF50";
+                            addLog("🎉 البث المباشر يعمل الآن");
+                        } else if (info === "publish_finished") {
+                            statusEl.textContent = "البث توقف";
+                            statusEl.style.color = "#ff9800";
+                            addLog("⏹ البث توقف");
+                        } else if (info === "ice_candidate") {
+                            addLog("🔗 ICE candidate تم إنشاؤه");
                         }
-                        document.getElementById('status').innerHTML = msg;
+                    },
+                    
+                    callbackError: (error, message) => {
+                        addLog(`❌ callbackError: ${error} - ${message || 'لا توجد تفاصيل إضافية'}`);
+                        statusEl.textContent = `خطأ: ${error}`;
+                        statusEl.style.color = "#f44336";
+                        console.error("خطأ مفصل من Adaptor:", error, message);
                     }
                 });
                 
-            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                video.src = url;
-                video.addEventListener('loadedmetadata', () => {
-                    video.play();
-                    document.getElementById('status').innerHTML = '✅ البث يعمل (Safari)';
-                });
+                addLog("✅ تم إنشاء كائن WebRTCAdaptor");
+                
+            } catch (err) {
+                addLog(`❌ فشل catch: ${err.name} - ${err.message}`);
+                statusEl.textContent = `خطأ: ${err.name}`;
+                statusEl.style.color = "#f44336";
+                
+                // تحليل نوع الخطأ وتقديم اقتراح
+                if (err.name === 'NotAllowedError') {
+                    addLog("💡 الاقتراح: تم رفض الإذن. تأكد من منح التطبيق صلاحية الكاميرا والميكروفون.");
+                } else if (err.name === 'NotFoundError') {
+                    addLog("💡 الاقتراح: لم يتم العثور على جهاز الكاميرا/الميكروفون. حاول فحص الأجهزة المتاحة.");
+                } else if (err.name === 'NotReadableError' || err.name === 'AbortError') {
+                    addLog("💡 الاقتراح: الجهاز مستخدم من قبل تطبيق آخر. أغلق التطبيقات الأخرى التي تستخدم الكاميرا.");
+                } else if (err.name === 'OverconstrainedError') {
+                    addLog("💡 الاقتراح: الإعدادات المطلوبة غير متوافقة مع الجهاز. جرب إعدادات أبسط.");
+                }
             }
         }
-        
-        function stopPlayback() {
-            if (hls) hls.destroy();
-            document.getElementById('videoPlayer').src = '';
-            document.getElementById('status').innerHTML = '⏹ متوقف';
+
+        // ========== إيقاف البث ==========
+        function stopBroadcast() {
+            addLog("--- إيقاف البث ---");
+            if (webRTCAdaptor) {
+                webRTCAdaptor.stop(STREAM_ID);
+                addLog("تم إرسال أمر إيقاف إلى الخادم");
+            }
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    track.stop();
+                    addLog(`تم إيقاف track: ${track.kind}`);
+                });
+            }
+            localVideo.srcObject = null;
+            statusEl.textContent = "البث متوقف";
+            statusEl.style.color = "#fff";
         }
+
+        window.addEventListener('beforeunload', stopBroadcast);
+        
+        // تهيئة أولية
+        addLog("✅ الصفحة جاهزة. استخدم زر 'فحص الأجهزة' أولاً.");
     </script>
 </body>
 </html>
