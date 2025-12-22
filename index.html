@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -35,7 +34,7 @@
             width: 100%; max-width: 640px; height: auto;
             background: #000; border-radius: 12px;
             border: 3px solid #37474F; margin: 15px auto;
-            display: block; transform: scaleX(-1); /* لقلب المرآة */
+            display: block; transform: scaleX(-1);
         }
         .controls {
             margin: 25px 0; display: flex;
@@ -88,10 +87,8 @@
 <body>
     <div class="container">
         <h3>🎥 منصة البث المباشر - الواجهة التجريبية</h3>
-        <!-- شاشة العرض الرئيسية -->
         <video id="localVideo" autoplay playsinline muted></video>
 
-        <!-- لوحة التحكم بالأزرار -->
         <div class="controls">
             <button id="btnDevices" onclick="listDevices()">
                 <span style="margin-left:8px;">🔍</span> فحص الأجهزة
@@ -104,12 +101,10 @@
             </button>
         </div>
 
-        <!-- شريط حالة النظام -->
         <div id="status">
-            ✅ النظام جاهز. يرجى البدء بفحص الأجهزة أولاً.
+            ⏳ جاري التهيئة...
         </div>
 
-        <!-- سجل الأحداث التفصيلي -->
         <div class="log-header">
             <span>📋 سجل التشغيل التفصيلي:</span>
             <button id="btnClearLog" onclick="clearLog()">🗑️ مسح السجل</button>
@@ -117,33 +112,32 @@
         <div id="log">[تم تحميل الواجهة بنجاح]</div>
 
         <div class="footer">
-            <p>مشروع تطوير منصة تعليمية | إصدار تشخيصي v2.0</p>
+            <p>مشروع تطوير منصة تعليمية | إصدار تشخيصي v2.1</p>
         </div>
     </div>
 
-    <!-- المكتبات الأساسية - يجب أن تكون في نهاية <body> لتحسين الأداء -->
-    <!-- 1. webrtc-adapter (لتوحيد واجهات WebRTC بين المتصفحات) -->
-    
-    
+    <!-- المكتبات الأساسية -->
     <script src="js/adapter.js"></script>
-    
-    
-    <!-- تحميل النسخة الثابتة والمستقرة من الخادم الخاص بك بدلاً من المتغير -->
+    <script src="https://ant-media-2kbz.onrender.com/live/js/webrtc_adaptor-d838e473.js"></script>
 
-  <script src="https://ant-media-2kbz.onrender.com/live/js/https://ant-media-2kbz.onrender.com/live/js/webrtc_adaptor-d838e473.js"></script>
-
-    
+    <!-- الكود الأساسي للتطبيق -->
     <script>
+        // ========== تشخيص تحميل الصفحة ==========
+        console.log("=== بدء تشخيص الصفحة ===");
+        console.log("1. عنوان الصفحة:", window.location.href);
+        console.log("2. تم تحميل adapter؟", typeof adapter !== 'undefined' ? "✅ نعم" : "❌ لا");
+        console.log("3. تم تحميل WebRTCAdaptor؟", typeof WebRTCAdaptor !== 'undefined' ? "✅ نعم" : "❌ لا");
+
         // ========== تعريف المتغيرات الأساسية العالمية ==========
         const CONFIG = {
-            SERVER_URL: "wss://ant-media-2kbz.onrender.com/live/websocket", // استخدم wss مع Render
+            SERVER_URL: "wss://ant-media-2kbz.onrender.com/live/websocket",
             STREAM_ID: "test_stream_" + Math.floor(Math.random() * 10000),
             MEDIA_CONSTRAINTS: {
                 video: {
                     width: { ideal: 640, max: 1280 },
                     height: { ideal: 480, max: 720 },
                     frameRate: { ideal: 24, max: 30 },
-                    facingMode: "user" // 'user' للكاميرا الأمامية، 'environment' للخلفية
+                    facingMode: "user"
                 },
                 audio: {
                     channelCount: 1,
@@ -166,48 +160,16 @@
         let reconnectAttempts = 0;
         const MAX_RECONNECT = 3;
 
-        // عناصر DOM (تم وضع تعريفها هنا لتكون متاحة عالمياً)
-        let statusEl, logEl, localVideo, btnStart, btnStop;
-
-        // ========== دالة تهيئة الصفحة - تعمل عند تحميل الصفحة ==========
-        function initPage() {
-            // ربط عناصر DOM بالمتغيرات
-            statusEl = document.getElementById('status');
-            logEl = document.getElementById('log');
-            localVideo = document.getElementById('localVideo');
-            btnStart = document.getElementById('btnStart');
-            btnStop = document.getElementById('btnStop');
-
-            // تسجيل حدث تحميل المكتبات
-            addLog("🔧 بدء تهيئة النظام...");
-
-            // اختبار وجود المكتبات الضرورية
-            if (typeof adapter === 'undefined') {
-                showError("لم يتم تحميل مكتبة WebRTC Adapter. تحقق من اتصال الإنترنت.");
-                return;
-            }
-
-            if (typeof WebRTCAdaptor === 'undefined') {
-                showError("لم يتم تحميل مكتبة Ant Media Adaptor. تحقق من الرابط.");
-                return;
-            }
-
-            addLog("✅ تم تحميل المكتبات الأساسية بنجاح.");
-            addLog(`🌐 جاهز للاتصال بالخادم: ${CONFIG.SERVER_URL}`);
-            addLog(`📼 معرف البث التجريبي: ${CONFIG.STREAM_ID}`);
-
-            // تحديث حالة النظام
-            updateStatus("النظام جاهز للعمل", "info");
-            btnStart.disabled = false;
-        }
+        // عناصر DOM
+        let statusEl, logEl, localVideo, btnStart, btnStop, btnDevices;
 
         // ========== دوال مساعدة للتسجيل وعرض الحالة ==========
         function addLog(message) {
             const time = new Date().toLocaleTimeString('ar-EG');
             const logEntry = `[${time}] ${message}`;
             logEl.innerHTML += logEntry + "<br>";
-            logEl.scrollTop = logEl.scrollHeight; // التمرير التلقائي للأسفل
-            console.log(logEntry); // أيضًا لوحدة التحكم للمطور
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(logEntry);
         }
 
         function updateStatus(message, type = "info") {
@@ -220,7 +182,7 @@
         function showError(errorMsg) {
             updateStatus(`❌ خطأ: ${errorMsg}`, "error");
             addLog(`❌ خطأ حرج: ${errorMsg}`);
-            btnStart.disabled = true;
+            if(btnStart) btnStart.disabled = true;
         }
 
         function clearLog() {
@@ -228,15 +190,64 @@
             addLog("تم مسح سجل التشغيل يدويًا.");
         }
 
+        // ========== دالة تهيئة الصفحة - محسنة للتشخيص ==========
+        function initPage() {
+            console.log("=== بدء initPage ===");
+            
+            // ربط عناصر DOM بالمتغيرات
+            statusEl = document.getElementById('status');
+            logEl = document.getElementById('log');
+            localVideo = document.getElementById('localVideo');
+            btnStart = document.getElementById('btnStart');
+            btnStop = document.getElementById('btnStop');
+            btnDevices = document.getElementById('btnDevices');
+            
+            console.log("4. عناصر DOM:", { statusEl, logEl, localVideo, btnStart, btnStop, btnDevices });
+
+            // تسجيل حدث تحميل المكتبات
+            addLog("🔧 بدء تهيئة النظام...");
+            console.log("5. بدء فحص المكتبات...");
+
+            // اختبار وجود المكتبات الضرورية - مع تفاصيل أكثر
+            if (typeof adapter === 'undefined') {
+                console.error("❌ مكتبة adapter غير محملة!");
+                showError("لم يتم تحميل مكتبة WebRTC Adapter.");
+                return;
+            } else {
+                console.log("✅ مكتبة adapter محملة بنجاح");
+            }
+
+            if (typeof WebRTCAdaptor === 'undefined') {
+                console.error("❌ مكتبة WebRTCAdaptor غير محملة!");
+                console.log("تفاصيل المتغيرات العالمية:", Object.keys(window).filter(k => k.includes('WebRTC') || k.includes('Adaptor')));
+                showError("لم يتم تحميل مكتبة Ant Media Adaptor. تحقق من الرابط.");
+                return;
+            } else {
+                console.log("✅ مكتبة WebRTCAdaptor محملة بنجاح، النوع:", typeof WebRTCAdaptor);
+            }
+
+            addLog("✅ تم تحميل المكتبات الأساسية بنجاح.");
+            addLog(`🌐 جاهز للاتصال بالخادم: ${CONFIG.SERVER_URL}`);
+            addLog(`📼 معرف البث التجريبي: ${CONFIG.STREAM_ID}`);
+
+            // تحديث حالة النظام
+            updateStatus("✅ النظام جاهز. يرجى البدء بفحص الأجهزة أولاً.", "success");
+            if(btnStart) btnStart.disabled = false;
+            if(btnDevices) btnDevices.disabled = false;
+            
+            console.log("=== انتهاء initPage بنجاح ===");
+        }
+
         // ========== دالة فحص الأجهزة المتاحة ==========
         async function listDevices() {
+            console.log("تشغيل listDevices...");
             updateStatus("🔍 جاري فحص الأجهزة المتاحة...", "info");
             addLog("--- بدء فحص الأجهزة ---");
 
             try {
-                // طلب إذن الوصول للأجهزة أولاً (بمتطلبات بسيطة)
+                // طلب إذن الوصول للأجهزة أولاً
                 const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-                tempStream.getTracks().forEach(track => track.stop()); // إيقاف فوري
+                tempStream.getTracks().forEach(track => track.stop());
 
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 let hasVideo = false, hasAudio = false;
@@ -250,21 +261,23 @@
                     if (device.kind === 'audioinput') hasAudio = true;
                 });
 
-  script        if (!hasVideo) addLog("⚠️ تحذير: لم يتم العثور على كاميرا!");
+                if (!hasVideo) addLog("⚠️ تحذير: لم يتم العثور على كاميرا!");
                 if (!hasAudio) addLog("⚠️ تحذير: لم يتم العثور على ميكروفون!");
 
                 updateStatus(`✅ تم العثور على ${devices.length} جهاز`, hasVideo && hasAudio ? "success" : "warning");
-                btnStart.disabled = !(hasVideo && hasAudio);
+                if(btnStart) btnStart.disabled = !(hasVideo && hasAudio);
 
             } catch (err) {
+                console.error("خطأ في listDevices:", err);
                 addLog(`❌ فشل فحص الأجهزة: ${err.name} - ${err.message}`);
                 updateStatus("❌ فشل الوصول إلى الأجهزة", "error");
-                btnStart.disabled = true;
+                if(btnStart) btnStart.disabled = true;
             }
         }
 
         // ========== الدالة الرئيسية لبدء البث ==========
         async function startBroadcast() {
+            console.log("تشغيل startBroadcast...");
             if (isBroadcasting) {
                 updateStatus("⚠️ البث يعمل بالفعل!", "warning");
                 return;
@@ -275,11 +288,11 @@
             addLog(`📤 محاولة الاتصال بالخادم: ${CONFIG.SERVER_URL}`);
 
             // تعطيل زر البدء أثناء المحاولة
-            btnStart.disabled = true;
-            btnStop.disabled = false;
+            if(btnStart) btnStart.disabled = true;
+            if(btnStop) btnStop.disabled = false;
 
             try {
-                // 1. الحصول على دفق الوسائط (كاميرا + ميكروفون)
+                // 1. الحصول على دفق الوسائط
                 updateStatus("📷 جاري تفعيل الكاميرا والميكروفون...", "info");
                 addLog(`طلب الوسائط بالإعدادات: ${JSON.stringify(CONFIG.MEDIA_CONSTRAINTS)}`);
 
@@ -293,7 +306,7 @@
                 localVideo.srcObject = localStream;
                 updateStatus("🎥 المعاينة تعمل، جاري الاتصال بالخادم...", "info");
 
-                // 3. إنشاء كائن WebRTCAdaptor والتوصيل بالخادم
+                // 3. إنشاء كائن WebRTCAdaptor
                 addLog("🔌 محاولة إنشاء اتصال WebSocket مع خادم Ant Media...");
 
                 webRTCAdaptor = new WebRTCAdaptor({
@@ -302,10 +315,11 @@
                     peerconnection_config: { iceServers: CONFIG.ICE_SERVERS },
                     sdp_constraints: { OfferToReceiveAudio: false, OfferToReceiveVideo: false },
                     localVideoId: "localVideo",
-                    debug: true, // تفعيل وضع التصحيح
+                    debug: true,
 
                     callback: (info, obj) => {
                         addLog(`📞 [Callback] ${info}`);
+                        console.log("Callback from WebRTCAdaptor:", info);
 
                         switch(info) {
                             case "initialized":
@@ -318,7 +332,7 @@
                                 isBroadcasting = true;
                                 updateStatus("✅ البث المباشر يعمل بنجاح!", "success");
                                 addLog("🎉 البث المباشر يعمل الآن ويمكن مشاهدته من المتصلين.");
-                                reconnectAttempts = 0; // إعادة تعيين عداد إعادة المحاولة
+                                reconnectAttempts = 0;
                                 break;
 
                             case "publish_finished":
@@ -335,7 +349,7 @@
                                     addLog(`🔄 محاولة إعادة الاتصال (${reconnectAttempts}/${MAX_RECONNECT})...`);
                                     setTimeout(() => {
                                         if (webRTCAdaptor) webRTCAdaptor.close();
-                                        startBroadcast(); // إعادة المحاولة
+                                        startBroadcast();
                                     }, 2000);
                                 }
                                 break;
@@ -347,9 +361,9 @@
 
                     callbackError: (error, message) => {
                         addLog(`❌ [Error Callback] ${error} - ${message || 'لا توجد تفاصيل'}`);
+                        console.error("Error from WebRTCAdaptor:", error, message);
                         updateStatus(`خطأ: ${error}`, "error");
 
-                        // معالجة أخطاء محددة
                         if (error === "no_stream_exist") {
                             addLog("💡 تلميح: الخادم لم يعثر على الدفق. تأكد من صحة STREAM_ID.");
                         }
@@ -364,11 +378,11 @@
                 addLog("✅ تم إنشاء كائن WebRTCAdaptor بنجاح.");
 
             } catch (err) {
+                console.error("خطأ في startBroadcast:", err);
                 addLog(`❌ فشل تشغيل البث: ${err.name} - ${err.message}`);
                 updateStatus(`❌ فشل: ${err.name}`, "error");
                 resetUI();
 
-                // اقتراحات بناءً على نوع الخطأ
                 if (err.name === 'NotAllowedError') {
                     addLog("💡 تأكد من منح الإذن للكاميرا والميكروفون في إعدادات المتصفح.");
                 } else if (err.name === 'NotFoundError') {
@@ -381,6 +395,7 @@
 
         // ========== دالة إيقاف البث ==========
         function stopBroadcast() {
+            console.log("تشغيل stopBroadcast...");
             if (!isBroadcasting && !webRTCAdaptor) {
                 updateStatus("لا يوجد بث نشط لإيقافه", "warning");
                 return;
@@ -413,8 +428,8 @@
 
         // ========== دالة إعادة تعيين واجهة المستخدم ==========
         function resetUI() {
-            btnStart.disabled = false;
-            btnStop.disabled = true;
+            if(btnStart) btnStart.disabled = false;
+            if(btnStop) btnStop.disabled = true;
             reconnectAttempts = 0;
         }
 
@@ -428,9 +443,13 @@
             }
         });
 
-        window.addEventListener('load', initPage);
+        // تأخير تحميل initPage قليلاً للتأكد من تحميل كل المكتبات
+        window.addEventListener('load', () => {
+            console.log("حدث load تم استدعاؤه، جاري تشغيل initPage بعد تأخير بسيط...");
+            setTimeout(initPage, 100);
+        });
 
-        // ========== دالة مساعدة لعرض معلومات الاتصال (للمشاهد) ==========
+        // ========== دالة مساعدة لعرض معلومات الاتصال ==========
         function getViewerLink() {
             const link = `https://ant-media-2kbz.onrender.com/live/player.html?streamId=${CONFIG.STREAM_ID}`;
             addLog(`🔗 رابط المشاهدة: ${link}`);
@@ -438,9 +457,9 @@
             return link;
         }
 
-        // لجعل الدالة متاحة عالمياً للاستخدام من وحدة التحكم
         window.getViewerLink = getViewerLink;
 
+        console.log("=== تم تحميل كود JavaScript بنجاح ===");
     </script>
 </body>
-</html>
+        </html>
