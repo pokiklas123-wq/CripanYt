@@ -1,183 +1,441 @@
 <!DOCTYPE html>
-<html>
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="utf-8">
-    <title>البث المباشر - إصدار محسّن</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>منصة البث المباشر - المشروع التعليمي</title>
     <style>
-        body { margin:0; padding:20px; background:#111; text-align:center; font-family:Arial; color:#fff; }
-        #localVideo { width:100%; max-width:640px; background:#222; border-radius:10px; margin:10px auto; }
-        button { padding:15px 25px; margin:10px; font-size:16px; border:none; border-radius:8px; cursor:pointer; }
-        #status { margin:15px; padding:12px; background:#333; border-radius:6px; min-height:24px; }
-        #log { text-align:left; margin:20px auto; padding:15px; background:#1a1a1a; border-radius:8px; max-width:800px; font-family:monospace; font-size:12px; white-space:pre-wrap; max-height:200px; overflow-y:auto; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 20px;
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #f0f0f0;
+            text-align: center;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 900px; margin: 0 auto;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+        }
+        h3 {
+            margin: 0 0 25px 0;
+            color: #4FC3F7;
+            font-size: 1.8em;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        #localVideo {
+            width: 100%; max-width: 640px; height: auto;
+            background: #000; border-radius: 12px;
+            border: 3px solid #37474F; margin: 15px auto;
+            display: block; transform: scaleX(-1); /* لقلب المرآة */
+        }
+        .controls {
+            margin: 25px 0; display: flex;
+            flex-wrap: wrap; justify-content: center;
+            gap: 15px;
+        }
+        button {
+            padding: 16px 28px; margin: 5px;
+            font-size: 16px; font-weight: bold; border: none;
+            border-radius: 50px; cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex; align-items: center;
+            justify-content: center; min-width: 180px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+        button:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.4); }
+        button:active { transform: translateY(0); }
+        #btnDevices { background: linear-gradient(45deg, #FF9800, #F57C00); color: #fff; }
+        #btnStart { background: linear-gradient(45deg, #4CAF50, #2E7D32); color: #fff; }
+        #btnStop { background: linear-gradient(45deg, #F44336, #C62828); color: #fff; }
+        #btnStop:disabled { background: #757575; cursor: not-allowed; }
+        #status {
+            margin: 20px auto; padding: 15px;
+            background: rgba(33, 150, 243, 0.1);
+            border-radius: 10px; border-right: 5px solid #2196F3;
+            font-size: 1.1em; min-height: 24px;
+        }
+        #log {
+            text-align: left; margin: 25px auto; padding: 20px;
+            background: rgba(0, 0, 0, 0.7); border-radius: 12px;
+            font-family: 'Courier New', monospace; font-size: 13px;
+            white-space: pre-wrap; max-height: 300px;
+            overflow-y: auto; border: 1px solid #444;
+        }
+        .log-header {
+            display: flex; justify-content: space-between;
+            margin-bottom: 10px; color: #AAA;
+            font-size: 0.9em;
+        }
+        #btnClearLog {
+            background: transparent; color: #AAA;
+            border: 1px solid #666; padding: 5px 15px;
+            font-size: 0.9em; min-width: auto;
+        }
+        .footer {
+            margin-top: 30px; color: #AAA; font-size: 0.9em;
+        }
     </style>
-    <script src="https://ant-media-2kbz.onrender.com/live/js/webrtc_adaptor.js"></script>
 </head>
 <body>
-    <h3>🎥 بث مباشر عبر WebView - (نسخة تشخيص)</h3>
-    <video id="localVideo" autoplay playsinline muted></video>
-    <br>
-    <button onclick="listDevices()" style="background:#FF9800;">🔍 فحص الأجهزة</button>
-    <button onclick="startBroadcast()" style="background:#4CAF50;">▶ بدء البث</button>
-    <button onclick="stopBroadcast()" style="background:#f44336;">⏹ إيقاف البث</button>
-    <p id="status">✅ جاهز للتشغيل</p>
-    <div id="log">سجل التشغيل:<br></div>
+    <div class="container">
+        <h3>🎥 منصة البث المباشر - الواجهة التجريبية</h3>
+        <!-- شاشة العرض الرئيسية -->
+        <video id="localVideo" autoplay playsinline muted></video>
 
+        <!-- لوحة التحكم بالأزرار -->
+        <div class="controls">
+            <button id="btnDevices" onclick="listDevices()">
+                <span style="margin-left:8px;">🔍</span> فحص الأجهزة
+            </button>
+            <button id="btnStart" onclick="startBroadcast()">
+                <span style="margin-left:8px;">▶</span> بدء البث المباشر
+            </button>
+            <button id="btnStop" onclick="stopBroadcast()" disabled>
+                <span style="margin-left:8px;">⏹</span> إيقاف البث
+            </button>
+        </div>
+
+        <!-- شريط حالة النظام -->
+        <div id="status">
+            ✅ النظام جاهز. يرجى البدء بفحص الأجهزة أولاً.
+        </div>
+
+        <!-- سجل الأحداث التفصيلي -->
+        <div class="log-header">
+            <span>📋 سجل التشغيل التفصيلي:</span>
+            <button id="btnClearLog" onclick="clearLog()">🗑️ مسح السجل</button>
+        </div>
+        <div id="log">[تم تحميل الواجهة بنجاح]</div>
+
+        <div class="footer">
+            <p>مشروع تطوير منصة تعليمية | إصدار تشخيصي v2.0</p>
+        </div>
+    </div>
+
+    <!-- المكتبات الأساسية - يجب أن تكون في نهاية <body> لتحسين الأداء -->
+    <!-- 1. webrtc-adapter (لتوحيد واجهات WebRTC بين المتصفحات) -->
+    <script src="https://cdn.jsdelivr.net/npm/webrtc-adapter@latest/release/adapter.min.js"></script>
+    <!-- 2. مكتبة Ant Media WebRTC Adaptor (الرئيسية) -->
+    <!-- تحميل النسخة الثابتة والمستقرة من الخادم الخاص بك بدلاً من المتغير -->
+    <script src="https://ant-media-2kbz.onrender.com/live/js/webrtc_adaptor.js"></script>
+
+    <!-- الكود الأساسي للتطبيق -->
     <script>
-        const SERVER_URL = "https://ant-media-2kbz.onrender.com/live/websocket";
-        const STREAM_ID = "test_stream_" + Math.floor(Math.random() * 1000);
-        
+        // ========== تعريف المتغيرات الأساسية العالمية ==========
+        const CONFIG = {
+            SERVER_URL: "wss://ant-media-2kbz.onrender.com/live/websocket", // استخدم wss مع Render
+            STREAM_ID: "test_stream_" + Math.floor(Math.random() * 10000),
+            MEDIA_CONSTRAINTS: {
+                video: {
+                    width: { ideal: 640, max: 1280 },
+                    height: { ideal: 480, max: 720 },
+                    frameRate: { ideal: 24, max: 30 },
+                    facingMode: "user" // 'user' للكاميرا الأمامية، 'environment' للخلفية
+                },
+                audio: {
+                    channelCount: 1,
+                    sampleRate: 44100,
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            },
+            ICE_SERVERS: [
+                { urls: "stun:stun.l.google.com:19302" },
+                { urls: "stun:stun1.l.google.com:19302" },
+                { urls: "stun:stun2.l.google.com:19302" }
+            ]
+        };
+
         let webRTCAdaptor = null;
         let localStream = null;
-        const statusEl = document.getElementById('status');
-        const logEl = document.getElementById('log');
-        const localVideo = document.getElementById('localVideo');
+        let isBroadcasting = false;
+        let reconnectAttempts = 0;
+        const MAX_RECONNECT = 3;
 
-        // ========== وظيفة تسجيل الأحداث ==========
-        function addLog(message) {
-            const time = new Date().toLocaleTimeString();
-            logEl.innerHTML += `[${time}] ${message}<br>`;
-            logEl.scrollTop = logEl.scrollHeight;
-            console.log(message);
+        // عناصر DOM (تم وضع تعريفها هنا لتكون متاحة عالمياً)
+        let statusEl, logEl, localVideo, btnStart, btnStop;
+
+        // ========== دالة تهيئة الصفحة - تعمل عند تحميل الصفحة ==========
+        function initPage() {
+            // ربط عناصر DOM بالمتغيرات
+            statusEl = document.getElementById('status');
+            logEl = document.getElementById('log');
+            localVideo = document.getElementById('localVideo');
+            btnStart = document.getElementById('btnStart');
+            btnStop = document.getElementById('btnStop');
+
+            // تسجيل حدث تحميل المكتبات
+            addLog("🔧 بدء تهيئة النظام...");
+
+            // اختبار وجود المكتبات الضرورية
+            if (typeof adapter === 'undefined') {
+                showError("لم يتم تحميل مكتبة WebRTC Adapter. تحقق من اتصال الإنترنت.");
+                return;
+            }
+
+            if (typeof WebRTCAdaptor === 'undefined') {
+                showError("لم يتم تحميل مكتبة Ant Media Adaptor. تحقق من الرابط.");
+                return;
+            }
+
+            addLog("✅ تم تحميل المكتبات الأساسية بنجاح.");
+            addLog(`🌐 جاهز للاتصال بالخادم: ${CONFIG.SERVER_URL}`);
+            addLog(`📼 معرف البث التجريبي: ${CONFIG.STREAM_ID}`);
+
+            // تحديث حالة النظام
+            updateStatus("النظام جاهز للعمل", "info");
+            btnStart.disabled = false;
         }
 
-        // ========== فحص أجهزة الكاميرا والميكروفون المتاحة ==========
+        // ========== دوال مساعدة للتسجيل وعرض الحالة ==========
+        function addLog(message) {
+            const time = new Date().toLocaleTimeString('ar-EG');
+            const logEntry = `[${time}] ${message}`;
+            logEl.innerHTML += logEntry + "<br>";
+            logEl.scrollTop = logEl.scrollHeight; // التمرير التلقائي للأسفل
+            console.log(logEntry); // أيضًا لوحدة التحكم للمطور
+        }
+
+        function updateStatus(message, type = "info") {
+            statusEl.textContent = message;
+            const colors = { info: "#4FC3F7", success: "#4CAF50", error: "#F44336", warning: "#FF9800" };
+            statusEl.style.borderRightColor = colors[type] || colors.info;
+            statusEl.style.color = colors[type] || colors.info;
+        }
+
+        function showError(errorMsg) {
+            updateStatus(`❌ خطأ: ${errorMsg}`, "error");
+            addLog(`❌ خطأ حرج: ${errorMsg}`);
+            btnStart.disabled = true;
+        }
+
+        function clearLog() {
+            logEl.innerHTML = "[تم مسح سجل التشغيل]<br>";
+            addLog("تم مسح سجل التشغيل يدويًا.");
+        }
+
+        // ========== دالة فحص الأجهزة المتاحة ==========
         async function listDevices() {
-            addLog("--- فحص الأجهزة المتاحة ---");
+            updateStatus("🔍 جاري فحص الأجهزة المتاحة...", "info");
+            addLog("--- بدء فحص الأجهزة ---");
+
             try {
+                // طلب إذن الوصول للأجهزة أولاً (بمتطلبات بسيطة)
+                const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+                tempStream.getTracks().forEach(track => track.stop()); // إيقاف فوري
+
                 const devices = await navigator.mediaDevices.enumerateDevices();
+                let hasVideo = false, hasAudio = false;
+
                 devices.forEach(device => {
-                    addLog(`📟 ${device.kind}: ${device.label || 'اسم غير متاح'} (ID: ${device.deviceId})`);
+                    const icon = device.kind === 'videoinput' ? '📹' :
+                                 device.kind === 'audioinput' ? '🎤' :
+                                 device.kind === 'audiooutput' ? '🔊' : '📟';
+                    addLog(`${icon} ${device.kind}: ${device.label || 'جهاز غير معرّف'} (${device.deviceId.substring(0, 10)}...)`);
+                    if (device.kind === 'videoinput') hasVideo = true;
+                    if (device.kind === 'audioinput') hasAudio = true;
                 });
-                statusEl.textContent = "تم فحص الأجهزة، انظر السجل";
+
+                if (!hasVideo) addLog("⚠️ تحذير: لم يتم العثور على كاميرا!");
+                if (!hasAudio) addLog("⚠️ تحذير: لم يتم العثور على ميكروفون!");
+
+                updateStatus(`✅ تم العثور على ${devices.length} جهاز`, hasVideo && hasAudio ? "success" : "warning");
+                btnStart.disabled = !(hasVideo && hasAudio);
+
             } catch (err) {
-                addLog(`❌ خطأ في فحص الأجهزة: ${err.message}`);
+                addLog(`❌ فشل فحص الأجهزة: ${err.name} - ${err.message}`);
+                updateStatus("❌ فشل الوصول إلى الأجهزة", "error");
+                btnStart.disabled = true;
             }
         }
 
-        // ========== بدء البث (الإصدار المحسّن) ==========
+        // ========== الدالة الرئيسية لبدء البث ==========
         async function startBroadcast() {
-            statusEl.textContent = "جاري طلب الكاميرا والصوت...";
-            addLog("--- محاولة بدء البث ---");
-            
+            if (isBroadcasting) {
+                updateStatus("⚠️ البث يعمل بالفعل!", "warning");
+                return;
+            }
+
+            updateStatus("🚀 بدء إجراءات البث المباشر...", "info");
+            addLog("--- بدء تشغيل البث ---");
+            addLog(`📤 محاولة الاتصال بالخادم: ${CONFIG.SERVER_URL}`);
+
+            // تعطيل زر البدء أثناء المحاولة
+            btnStart.disabled = true;
+            btnStop.disabled = false;
+
             try {
-                // 1. طلب الوسائط بإعدادات مفصلة للصوت (للتغلب على مشاكل التشغيل)
-                const mediaConstraints = {
-                    video: {
-                        width: { ideal: 640 },
-                        height: { ideal: 480 },
-                        frameRate: { ideal: 24 }
-                    },
-                    audio: {
-                        echoCancellation: false,   // إيقاف إلغاء الصدى (قد يسبب مشاكل)
-                        noiseSuppression: false,   // إيقاف كتم الضوضاء
-                        autoGainControl: false,    // إيقاف التحكم التلقائي في مستوى الصوت
-                        channelCount: 1,           // ميكروفون أحادي (أبسط)
-                        sampleRate: 44100,         // تردد أخذ عينات قياسي
-                        sampleSize: 16             // حجم العينة قياسي
-                    }
-                };
-                
-                addLog("طلب الوسائط بالإعدادات التالية: " + JSON.stringify(mediaConstraints));
-                localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-                
-                // 2. عرض الفيديو المحلي
-                localVideo.srcObject = localStream;
+                // 1. الحصول على دفق الوسائط (كاميرا + ميكروفون)
+                updateStatus("📷 جاري تفعيل الكاميرا والميكروفون...", "info");
+                addLog(`طلب الوسائط بالإعدادات: ${JSON.stringify(CONFIG.MEDIA_CONSTRAINTS)}`);
+
+                localStream = await navigator.mediaDevices.getUserMedia(CONFIG.MEDIA_CONSTRAINTS);
+
                 const videoTrack = localStream.getVideoTracks()[0];
                 const audioTrack = localStream.getAudioTracks()[0];
-                addLog(`✅ تم الحصول على الوسائط بنجاح`);
-                addLog(`   كاميرا: ${videoTrack.label || 'غير معروف'}`);
-                addLog(`   ميكروفون: ${audioTrack.label || 'غير معروف'}`);
-                addLog(`   حالة الميكروفون: ${audioTrack.enabled ? 'مفعل' : 'معطل'}`);
-                addLog(`   حالة الصوت: ${audioTrack.muted ? 'مكتوم' : 'غير مكتوم'}`);
-                
-                statusEl.textContent = "الكاميرا جاهزة، جاري الاتصال بالخادم...";
-                
-                // 3. الاتصال بخادم Ant Media
+                addLog(`✅ تم تفعيل الوسائط: ${videoTrack.label || 'كاميرا'} & ${audioTrack.label || 'ميكروفون'}`);
+
+                // 2. عرض المعاينة المحلية
+                localVideo.srcObject = localStream;
+                updateStatus("🎥 المعاينة تعمل، جاري الاتصال بالخادم...", "info");
+
+                // 3. إنشاء كائن WebRTCAdaptor والتوصيل بالخادم
+                addLog("🔌 محاولة إنشاء اتصال WebSocket مع خادم Ant Media...");
+
                 webRTCAdaptor = new WebRTCAdaptor({
-                    websocket_url: SERVER_URL,
+                    websocket_url: CONFIG.SERVER_URL,
                     mediaConstraints: { video: true, audio: true },
-                    peerconnection_config: { 
-                        iceServers: [
-                            { urls: "stun:stun.l.google.com:19302" },
-                            { urls: "stun:stun1.l.google.com:19302" }
-                        ] 
-                    },
-                    sdp_constraints: { 
-                        OfferToReceiveAudio: false, 
-                        OfferToReceiveVideo: false 
-                    },
+                    peerconnection_config: { iceServers: CONFIG.ICE_SERVERS },
+                    sdp_constraints: { OfferToReceiveAudio: false, OfferToReceiveVideo: false },
                     localVideoId: "localVideo",
-                    debug: true,  // تفعيل وضع التصحيح
-                    
+                    debug: true, // تفعيل وضع التصحيح
+
                     callback: (info, obj) => {
-                        addLog(`📞 callback: ${info}`);
-                        if (info === "initialized") {
-                            statusEl.textContent = "متصل، جاري بدء البث...";
-                            webRTCAdaptor.publish(STREAM_ID);
-                            addLog(`🚀 إرسال طلب البث مع ID: ${STREAM_ID}`);
-                        } else if (info === "publish_started") {
-                            statusEl.textContent = "✅ البث المباشر يعمل بنجاح!";
-                            statusEl.style.color = "#4CAF50";
-                            addLog("🎉 البث المباشر يعمل الآن");
-                        } else if (info === "publish_finished") {
-                            statusEl.textContent = "البث توقف";
-                            statusEl.style.color = "#ff9800";
-                            addLog("⏹ البث توقف");
-                        } else if (info === "ice_candidate") {
-                            addLog("🔗 ICE candidate تم إنشاؤه");
+                        addLog(`📞 [Callback] ${info}`);
+
+                        switch(info) {
+                            case "initialized":
+                                updateStatus("🌐 متصل بالخادم، جاري بدء البث...", "info");
+                                webRTCAdaptor.publish(CONFIG.STREAM_ID);
+                                addLog(`🚀 إرسال طلب نشر البث باسم: ${CONFIG.STREAM_ID}`);
+                                break;
+
+                            case "publish_started":
+                                isBroadcasting = true;
+                                updateStatus("✅ البث المباشر يعمل بنجاح!", "success");
+                                addLog("🎉 البث المباشر يعمل الآن ويمكن مشاهدته من المتصلين.");
+                                reconnectAttempts = 0; // إعادة تعيين عداد إعادة المحاولة
+                                break;
+
+                            case "publish_finished":
+                                isBroadcasting = false;
+                                updateStatus("⏹ توقف البث", "info");
+                                addLog("انتهى البث بشكل طبيعي.");
+                                resetUI();
+                                break;
+
+                            case "closed":
+                                addLog("تم إغلاق اتصال WebSocket.");
+                                if (isBroadcasting && reconnectAttempts < MAX_RECONNECT) {
+                                    reconnectAttempts++;
+                                    addLog(`🔄 محاولة إعادة الاتصال (${reconnectAttempts}/${MAX_RECONNECT})...`);
+                                    setTimeout(() => {
+                                        if (webRTCAdaptor) webRTCAdaptor.close();
+                                        startBroadcast(); // إعادة المحاولة
+                                    }, 2000);
+                                }
+                                break;
+
+                            default:
+                                addLog(`حدث غير معالج: ${info}`);
                         }
                     },
-                    
+
                     callbackError: (error, message) => {
-                        addLog(`❌ callbackError: ${error} - ${message || 'لا توجد تفاصيل إضافية'}`);
-                        statusEl.textContent = `خطأ: ${error}`;
-                        statusEl.style.color = "#f44336";
-                        console.error("خطأ مفصل من Adaptor:", error, message);
+                        addLog(`❌ [Error Callback] ${error} - ${message || 'لا توجد تفاصيل'}`);
+                        updateStatus(`خطأ: ${error}`, "error");
+
+                        // معالجة أخطاء محددة
+                        if (error === "no_stream_exist") {
+                            addLog("💡 تلميح: الخادم لم يعثر على الدفق. تأكد من صحة STREAM_ID.");
+                        }
+                        if (error === "websocket_closed") {
+                            if (reconnectAttempts < MAX_RECONNECT) {
+                                addLog(`🔄 سيتم محاولة إعادة الاتصال تلقائيًا...`);
+                            }
+                        }
                     }
                 });
-                
-                addLog("✅ تم إنشاء كائن WebRTCAdaptor");
-                
+
+                addLog("✅ تم إنشاء كائن WebRTCAdaptor بنجاح.");
+
             } catch (err) {
-                addLog(`❌ فشل catch: ${err.name} - ${err.message}`);
-                statusEl.textContent = `خطأ: ${err.name}`;
-                statusEl.style.color = "#f44336";
-                
-                // تحليل نوع الخطأ وتقديم اقتراح
+                addLog(`❌ فشل تشغيل البث: ${err.name} - ${err.message}`);
+                updateStatus(`❌ فشل: ${err.name}`, "error");
+                resetUI();
+
+                // اقتراحات بناءً على نوع الخطأ
                 if (err.name === 'NotAllowedError') {
-                    addLog("💡 الاقتراح: تم رفض الإذن. تأكد من منح التطبيق صلاحية الكاميرا والميكروفون.");
+                    addLog("💡 تأكد من منح الإذن للكاميرا والميكروفون في إعدادات المتصفح.");
                 } else if (err.name === 'NotFoundError') {
-                    addLog("💡 الاقتراح: لم يتم العثور على جهاز الكاميرا/الميكروفون. حاول فحص الأجهزة المتاحة.");
-                } else if (err.name === 'NotReadableError' || err.name === 'AbortError') {
-                    addLog("💡 الاقتراح: الجهاز مستخدم من قبل تطبيق آخر. أغلق التطبيقات الأخرى التي تستخدم الكاميرا.");
-                } else if (err.name === 'OverconstrainedError') {
-                    addLog("💡 الاقتراح: الإعدادات المطلوبة غير متوافقة مع الجهاز. جرب إعدادات أبسط.");
+                    addLog("💡 تأكد من وجود كاميرا وميكروفون عاملين.");
+                } else if (err.name === 'NotReadableError') {
+                    addLog("💡 الجهاز مشغول. أغلق أي تطبيق آخر يستخدم الكاميرا.");
                 }
             }
         }
 
-        // ========== إيقاف البث ==========
+        // ========== دالة إيقاف البث ==========
         function stopBroadcast() {
-            addLog("--- إيقاف البث ---");
-            if (webRTCAdaptor) {
-                webRTCAdaptor.stop(STREAM_ID);
-                addLog("تم إرسال أمر إيقاف إلى الخادم");
+            if (!isBroadcasting && !webRTCAdaptor) {
+                updateStatus("لا يوجد بث نشط لإيقافه", "warning");
+                return;
             }
+
+            addLog("--- إيقاف البث ---");
+            updateStatus("⏹ جاري إيقاف البث...", "info");
+
+            if (webRTCAdaptor) {
+                webRTCAdaptor.stop(CONFIG.STREAM_ID);
+                webRTCAdaptor.close();
+                webRTCAdaptor = null;
+                addLog("تم إرسال أمر الإيقاف للخادم وإغلاق الاتصال.");
+            }
+
             if (localStream) {
                 localStream.getTracks().forEach(track => {
                     track.stop();
-                    addLog(`تم إيقاف track: ${track.kind}`);
+                    addLog(`تم إيقاف مسار ${track.kind}`);
                 });
+                localStream = null;
             }
+
             localVideo.srcObject = null;
-            statusEl.textContent = "البث متوقف";
-            statusEl.style.color = "#fff";
+            isBroadcasting = false;
+            updateStatus("✅ البث متوقف. يمكنك البدء من جديد.", "info");
+            resetUI();
+            addLog("✅ تم إيقاف جميع الموارد.");
         }
 
-        window.addEventListener('beforeunload', stopBroadcast);
-        
-        // تهيئة أولية
-        addLog("✅ الصفحة جاهزة. استخدم زر 'فحص الأجهزة' أولاً.");
+        // ========== دالة إعادة تعيين واجهة المستخدم ==========
+        function resetUI() {
+            btnStart.disabled = false;
+            btnStop.disabled = true;
+            reconnectAttempts = 0;
+        }
+
+        // ========== إدارة دورة حياة الصفحة ==========
+        window.addEventListener('beforeunload', (event) => {
+            if (isBroadcasting) {
+                addLog("⚠️ تحذير: تم محاولة إغلاق الصفحة أثناء البث!");
+                stopBroadcast();
+                event.preventDefault();
+                event.returnValue = 'يوجد بث قيد التشغيل. هل تريد المغادرة؟';
+            }
+        });
+
+        window.addEventListener('load', initPage);
+
+        // ========== دالة مساعدة لعرض معلومات الاتصال (للمشاهد) ==========
+        function getViewerLink() {
+            const link = `https://ant-media-2kbz.onrender.com/live/player.html?streamId=${CONFIG.STREAM_ID}`;
+            addLog(`🔗 رابط المشاهدة: ${link}`);
+            updateStatus(`رابط المشاهدة جاهز في السجل`, "info");
+            return link;
+        }
+
+        // لجعل الدالة متاحة عالمياً للاستخدام من وحدة التحكم
+        window.getViewerLink = getViewerLink;
+
     </script>
 </body>
 </html>
