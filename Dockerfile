@@ -1,8 +1,8 @@
 # استخدام صورة Owncast الرسمية
 FROM owncast/owncast:latest
 
-# المنفذ الذي يستمع عليه Owncast (للوحة الإدارة والمشاهدة)
-EXPOSE 8080 1935
+# يتم الآن استخدام المنفذ الديناميكي ($PORT) من Railway، لذا يمكن إزالة سطر EXPOSE أو تركه دون تأثير
+# EXPOSE 8080 1935
 
-# أمر التشغيل الافتراضي مضمن في الصورة
-CMD ["/app/owncast"]
+# أمر التشغيل مع المنفذ المحدد من Railway
+CMD owncast --webserverport=$PORT
