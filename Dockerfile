@@ -1,3 +1,8 @@
-FROM antmedia/community:2.14.0
-EXPOSE 5080 5443 1935
-CMD ["/usr/local/antmedia/start.sh"]
+# استخدام صورة Owncast الرسمية
+FROM owncast/owncast:latest
+
+# المنفذ الذي يستمع عليه Owncast (للوحة الإدارة والمشاهدة)
+EXPOSE 8080 1935
+
+# أمر التشغيل الافتراضي مضمن في الصورة
+CMD ["/app/owncast"]
