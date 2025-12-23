@@ -5,17 +5,12 @@
   },
   "deploy": {
     "restartPolicyType": "ALWAYS",
-    "healthcheckPath": "/api/status",
-    "healthcheckTimeout": 60
+    "healthcheckPath": "/api/status"
   },
   "environments": {
     "production": {
-      "deploy": {
-        "startCommand": "owncast --webserverport=$PORT"
-      },
       "variables": {
-        "OWNCAST_BASEURL": "https://cripanyt-production.up.railway.app",
-        "OWNCAST_STREAM_KEY": "your_custom_stream_key_here"
+        "OWNCAST_BASEURL": "https://cripanyt-production.up.railway.app"
       }
     }
   }
