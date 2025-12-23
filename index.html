@@ -3,43 +3,96 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>منصة Owncast - لوحة التحكم</title>
+    <title>🎥 البث المباشر - Owncast</title>
     <style>
-        * { box-sizing: border-box; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            margin: 0; padding: 20px;
-            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: #f0f0f0;
-            text-align: center;
-            line-height: 1.6;
+            background: linear-gradient(135deg, #0f2027, #203a43);
+            color: #fff;
             min-height: 100vh;
+            padding: 20px;
+            text-align: center;
         }
         .container {
-            max-width: 900px; margin: 0 auto;
+            max-width: 1000px;
+            margin: 0 auto;
             background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
             border-radius: 20px;
             padding: 25px;
+            backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
         }
-        h3 { margin: 0 0 25px 0; color: #4FC3F7; font-size: 1.8em; }
-        .server-info {
+        h1 {
+            color: #4FC3F7;
+            margin-bottom: 25px;
+            font-size: 2.2em;
+        }
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 854px;
+            margin: 0 auto 25px;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+        }
+        #videoPlayer {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+        }
+        button {
+            padding: 14px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 160px;
+            background: linear-gradient(45deg, #2196F3, #0D47A1);
+            color: white;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+        }
+        #btnPlay { background: linear-gradient(45deg, #4CAF50, #2E7D32); }
+        #btnPause { background: linear-gradient(45deg, #FF9800, #F57C00); }
+        #btnShare { background: linear-gradient(45deg, #9C27B0, #7B1FA2); }
+        #btnAdmin { background: linear-gradient(45deg, #607D8B, #455A64); }
+        .status {
+            margin: 20px auto;
+            padding: 15px;
+            background: rgba(33, 150, 243, 0.1);
+            border-radius: 10px;
+            border-right: 5px solid #2196F3;
+            font-size: 1.1em;
+        }
+        .share-box {
             background: rgba(0, 0, 0, 0.3);
             border-radius: 12px;
             padding: 20px;
-            margin: 20px 0;
-            border-left: 5px solid #4FC3F7;
+            margin: 25px 0;
             text-align: right;
+            border-right: 5px solid #FF9800;
         }
-        .info-title {
-            color: #4FC3F7;
-            font-weight: bold;
-            margin-bottom: 10px;
-            font-size: 1.2em;
-        }
-        .info-box {
+        .share-box h3 { color: #FF9800; margin-bottom: 15px; }
+        .url-box {
             background: rgba(255, 255, 255, 0.08);
             border-radius: 8px;
             padding: 15px;
@@ -49,7 +102,7 @@
             border: 1px solid #37474F;
         }
         .copy-btn {
-            background: linear-gradient(45deg, #FF9800, #F57C00);
+            background: #FF9800;
             color: white;
             border: none;
             padding: 8px 15px;
@@ -57,201 +110,176 @@
             cursor: pointer;
             font-size: 14px;
             margin-top: 10px;
-            transition: all 0.3s ease;
         }
-        .copy-btn:hover { transform: translateY(-2px); opacity: 0.9; }
-        .controls {
-            margin: 25px 0; display: flex;
-            flex-wrap: wrap; justify-content: center;
-            gap: 15px;
+        .footer {
+            margin-top: 30px;
+            color: #AAA;
+            font-size: 0.9em;
         }
-        button {
-            padding: 16px 28px; margin: 5px;
-            font-size: 16px; font-weight: bold; border: none;
-            border-radius: 50px; cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex; align-items: center;
-            justify-content: center; min-width: 180px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        .offline-msg {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            width: 80%;
         }
-        button:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.4); }
-        #btnDevices { background: linear-gradient(45deg, #FF9800, #F57C00); color: #fff; }
-        #btnTest { background: linear-gradient(45deg, #9C27B0, #7B1FA2); color: #fff; }
-        #btnWatch { background: linear-gradient(45deg, #4CAF50, #2E7D32); color: #fff; }
-        #btnAdmin { background: linear-gradient(45deg, #2196F3, #0D47A1); color: #fff; }
-        #status {
-            margin: 20px auto; padding: 15px;
-            background: rgba(33, 150, 243, 0.1);
-            border-radius: 10px; border-right: 5px solid #2196F3;
-            font-size: 1.1em; min-height: 24px;
-        }
-        #localVideo {
-            width: 100%; max-width: 640px; height: auto;
-            background: #000; border-radius: 12px;
-            border: 3px solid #37474F; margin: 15px auto;
-            display: block; transform: scaleX(-1);
-        }
-        .footer { margin-top: 30px; color: #AAA; font-size: 0.9em; }
-        .instructions {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 20px;
-            margin: 25px 0;
-            text-align: right;
-            border-right: 5px solid #FF9800;
-        }
-        .instructions h4 { color: #FF9800; margin-top: 0; }
-        .instructions ol { padding-right: 20px; }
-        .instructions li { margin-bottom: 10px; }
     </style>
+    <!-- مكتبة HLS.js لتشغيل الفيديو -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 </head>
 <body>
     <div class="container">
-        <h3>🎥 منصة Owncast - لوحة التحكم</h3>
+        <h1>🎥 البث المباشر - Owncast</h1>
         
-        <div class="server-info">
-            <div class="info-title">🛠️ إعدادات السيرفر الخاص بك</div>
-            <div class="info-box" id="serverUrlBox">
-                <strong>رابط السيرفر:</strong><br>
-                https://tech-app-hpk5.onrender.com
-                <button class="copy-btn" onclick="copyToClipboard('https://tech-app-hpk5.onrender.com')">
-                    📋 نسخ الرابط
-                </button>
-            </div>
-            <div class="info-box" id="rtmpBox">
-                <strong>رابط البث (RTMP) للتطبيق:</strong><br>
-                rtmp://tech-app-hpk5.onrender.com/live
-                <button class="copy-btn" onclick="copyToClipboard('rtmp://tech-app-hpk5.onrender.com/live')">
-                    📋 نسخ الرابط
-                </button>
-            </div>
-            <div class="info-box" id="streamKeyBox">
-                <strong>مفتاح البث (Stream Key):</strong><br>
-                <span id="streamKeyText">your_stream_key_here</span>
-                <button class="copy-btn" onclick="copyToClipboard(document.getElementById('streamKeyText').innerText)">
-                    📋 نسخ المفتاح
-                </button>
+        <div class="video-container">
+            <video id="videoPlayer" controls playsinline></video>
+            <div id="offlineMessage" class="offline-msg" style="display: none;">
+                <h3>⏸️ البث متوقف حاليًا</h3>
+                <p>لم يبدأ المذيع البث بعد، أو تم إيقاف البث.</p>
+                <p>حاول تحديث الصفحة لاحقًا.</p>
             </div>
         </div>
-
-        <div class="instructions">
-            <h4>📱 كيفية البث من تطبيق Android:</h4>
-            <ol>
-                <li>استخدم مكتبة مثل <code>rtmp-rtsp-stream-client-java</code></li>
-                <li>ضع <strong>رابط البث (RTMP)</strong> أعلاه في تطبيقك</li>
-                <li>ضع <strong>مفتاح البث</strong> أعلاه في تطبيقك</li>
-                <li>ابدأ البث وسيظهر مباشرة على صفحة المشاهدة</li>
-            </ol>
-        </div>
-
-        <video id="localVideo" autoplay playsinline muted></video>
+        
+        <div class="status" id="status">⚙️ جارٍ تحميل مشغل الفيديو...</div>
         
         <div class="controls">
-            <button id="btnDevices">🔍 فحص الكاميرا والميكروفون</button>
-            <button id="btnTest">🎬 اختبار عرض الكاميرا</button>
-            <button id="btnWatch" onclick="window.open('https://tech-app-hpk5.onrender.com', '_blank')">
-                📺 مشاهدة البث المباشر
-            </button>
-            <button id="btnAdmin" onclick="window.open('https://tech-app-hpk5.onrender.com/admin', '_blank')">
-                ⚙️ لوحة تحكم Owncast
-            </button>
+            <button id="btnPlay">▶ تشغيل البث</button>
+            <button id="btnPause">⏸ إيقاف مؤقت</button>
+            <button id="btnShare" onclick="shareStream()">📤 مشاركة الرابط</button>
+            <button id="btnAdmin" onclick="window.open('https://tech-app-hpk5.onrender.com/admin', '_blank')">⚙️ لوحة التحكم</button>
         </div>
-
-        <div id="status">⚙️ جاري التهيئة...</div>
-
-        <div class="instructions">
-            <h4>🔧 نصائح مهمة:</h4>
-            <ul>
-                <li>غيّر <strong>مفتاح البث</strong> من لوحة التحكم (<code>/admin</code>) لأسباب أمنية</li>
-                <li>البث الفعلي يتم من <strong>تطبيق Android</strong> وليس من هذه الصفحة</li>
-                <li>صفحة المشاهدة: <code>https://tech-app-hpk5.onrender.com</code></li>
-                <li>في الخطة المجانية، السيرفر يستغرق 30-60 ثانية ليبدأ عند زيارته أول مرة</li>
-            </ul>
+        
+        <div class="share-box">
+            <h3>🔗 رابط البث المباشر للمشاركة</h3>
+            <div class="url-box">
+                <strong>رابط HLS للمشاهدة:</strong><br>
+                <span id="hlsUrl">https://tech-app-hpk5.onrender.com/hls/stream.m3u8</span>
+                <button class="copy-btn" onclick="copyToClipboard('hlsUrl')">📋 نسخ رابط HLS</button>
+            </div>
+            <div class="url-box">
+                <strong>رابط صفحة المشاهدة (مباشر):</strong><br>
+                <span id="pageUrl">https://tech-app-hpk5.onrender.com</span>
+                <button class="copy-btn" onclick="copyToClipboard('pageUrl')">📋 نسخ رابط الصفحة</button>
+            </div>
+            <p>✅ شارك أي من هذين الرابطين مع المشاهدين لمشاهدة البث.</p>
         </div>
-
+        
         <div class="footer">
-            <p>🚀 Owncast Server | إصدار 0.2.3</p>
+            <p>Powered by Owncast | tech-app-hpk5.onrender.com</p>
         </div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            const videoPlayer = document.getElementById('videoPlayer');
             const statusEl = document.getElementById('status');
-            const localVideo = document.getElementById('localVideo');
-            const btnDevices = document.getElementById('btnDevices');
-            const btnTest = document.getElementById('btnTest');
-            const streamKeyText = document.getElementById('streamKeyText');
+            const btnPlay = document.getElementById('btnPlay');
+            const btnPause = document.getElementById('btnPause');
+            const offlineMsg = document.getElementById('offlineMessage');
             
-            let localStream = null;
-
-            // محاولة جلب مفتاح البث من localStorage إذا كان محفوظاً
-            const savedKey = localStorage.getItem('owncast_stream_key');
-            if (savedKey && savedKey !== 'your_stream_key_here') {
-                streamKeyText.textContent = savedKey;
+            // روابط البث
+            const HLS_URL = "https://tech-app-hpk5.onrender.com/hls/stream.m3u8";
+            const OWNCAST_PAGE = "https://tech-app-hpk5.onrender.com";
+            
+            let hls = null;
+            
+            // دالة تشغيل البث
+            function playStream() {
+                if (Hls.isSupported()) {
+                    hls = new Hls({
+                        enableWorker: false,
+                        lowLatencyMode: true,
+                        backBufferLength: 90
+                    });
+                    
+                    hls.loadSource(HLS_URL);
+                    hls.attachMedia(videoPlayer);
+                    
+                    hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                        videoPlayer.play().then(() => {
+                            statusEl.textContent = '▶️ البث يعمل الآن';
+                            statusEl.style.borderRightColor = '#4CAF50';
+                            offlineMsg.style.display = 'none';
+                        }).catch(e => {
+                            statusEl.textContent = '⚠️ يحتاج تفعيل الصوت/الفيديو';
+                        });
+                    });
+                    
+                    hls.on(Hls.Events.ERROR, function(event, data) {
+                        if (data.fatal) {
+                            switch(data.type) {
+                                case Hls.ErrorTypes.NETWORK_ERROR:
+                                    statusEl.textContent = '❌ خطأ في الشبكة أو البث متوقف';
+                                    offlineMsg.style.display = 'block';
+                                    break;
+                                case Hls.ErrorTypes.MEDIA_ERROR:
+                                    hls.recoverMediaError();
+                                    break;
+                            }
+                        }
+                    });
+                } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+                    // للـ Safari
+                    videoPlayer.src = HLS_URL;
+                    videoPlayer.addEventListener('loadedmetadata', function() {
+                        videoPlayer.play();
+                        statusEl.textContent = '▶️ البث يعمل الآن (Safari)';
+                    });
+                } else {
+                    statusEl.textContent = '❌ المتصفح لا يدعم HLS';
+                }
             }
-
-            // دالة نسخ النص
-            window.copyToClipboard = function(text) {
+            
+            // أحداث الأزرار
+            btnPlay.onclick = function() {
+                playStream();
+                statusEl.textContent = '🔄 جارٍ تشغيل البث...';
+            };
+            
+            btnPause.onclick = function() {
+                if (videoPlayer.paused) {
+                    videoPlayer.play();
+                    btnPause.textContent = '⏸ إيقاف مؤقت';
+                } else {
+                    videoPlayer.pause();
+                    btnPause.textContent = '▶ استئناف';
+                }
+            };
+            
+            // دالة المشاركة
+            window.shareStream = function() {
+                const pageUrl = document.getElementById('pageUrl').textContent;
+                if (navigator.share) {
+                    navigator.share({
+                        title: 'البث المباشر - Owncast',
+                        text: 'انضم لمشاهدة البث المباشر!',
+                        url: pageUrl
+                    });
+                } else {
+                    copyToClipboard('pageUrl');
+                    alert('✅ تم نسخ رابط الصفحة إلى الحافظة. شاركه الآن!');
+                }
+            };
+            
+            // دالة النسخ
+            window.copyToClipboard = function(elementId) {
+                const text = document.getElementById(elementId).textContent;
                 navigator.clipboard.writeText(text).then(() => {
-                    showNotification('تم النسخ إلى الحافظة: ' + text.substring(0, 30) + '...');
-                }).catch(err => {
-                    console.error('فشل النسخ: ', err);
+                    statusEl.textContent = '📋 تم النسخ: ' + text.substring(0, 40) + '...';
+                    setTimeout(() => {
+                        statusEl.textContent = '✅ جاهز';
+                    }, 3000);
                 });
             };
-
-            function showNotification(message) {
-                statusEl.innerHTML = `📋 ${message}`;
-                setTimeout(() => {
-                    statusEl.innerHTML = '⚙️ جاهز';
-                }, 3000);
-            }
-
-            // 1. زر فحص الأجهزة
-            btnDevices.onclick = async function() {
-                try {
-                    statusEl.textContent = '🔍 جاري طلب الكاميرا والميكروفون...';
-                    localStream = await navigator.mediaDevices.getUserMedia({ 
-                        video: true, 
-                        audio: true 
-                    });
-                    localVideo.srcObject = localStream;
-                    statusEl.textContent = '✅ الكاميرا والميكروفون جاهزان';
-                    showNotification('✅ تم تفعيل الكاميرا والميكروفون بنجاح');
-                } catch (err) {
-                    statusEl.textContent = '❌ فشل الوصول للأجهزة';
-                    showNotification(`❌ خطأ: ${err.message}`);
-                }
-            };
-
-            // 2. زر اختبار العرض
-            btnTest.onclick = function() {
-                if (!localStream) {
-                    showNotification('⚠️ يرجى تفعيل الكاميرا أولاً');
-                    return;
-                }
-                
-                if (localVideo.style.display === 'none') {
-                    localVideo.style.display = 'block';
-                    showNotification('🎬 تم تفعيل عرض الكاميرا');
-                } else {
-                    localVideo.style.display = 'none';
-                    showNotification('👁️ تم إخفاء عرض الكاميرا');
-                }
-            };
-
-            // إعدادات أولية
-            statusEl.textContent = '✅ جاهز للاستخدام';
-
-            // رابط لتحديث مفتاح البث
-            const updateKeyLink = document.createElement('a');
-            updateKeyLink.href = 'https://tech-app-hpk5.onrender.com/admin';
-            updateKeyLink.target = '_blank';
-            updateKeyLink.style.color = '#4FC3F7';
-            updateKeyLink.style.marginRight = '10px';
-            updateKeyLink.textContent = '(غيّر المفتاح من لوحة التحكم)';
             
-            streamKeyText.parentNode.insertBefore(updateKeyLink, streamKeyText.nextSibling);
+            // تشغيل البث تلقائيًا عند فتح الصفحة
+            statusEl.textContent = '🔄 جارٍ الاتصال بالبث...';
+            setTimeout(playStream, 1000);
         });
     </script>
 </body>
-</html>
+    </html>
