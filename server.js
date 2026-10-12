@@ -1,6 +1,6 @@
 // ============================================================
 //  Multi-Player Voice Relay Server (WebSocket)
-//  يدعم غرف بأي عدد لاعبين (broadcast)
+//  يدعم غرف بأي عدد لاعبين + كتم فردي عبر UID prefix
 //  Hosted on: cripanyt.onrender.com
 // ============================================================
 
@@ -44,37 +44,13 @@ wss.on('connection', (ws, req) => {
             }
 
             const parts = message.split(':');
-            // ROOM:roomId:JOIN:uid:name  → 5 أجزاء
             if (parts.length < 5 || parts[2] !== 'JOIN') {
-                // دعم التوافق مع النسخة القديمة (ROOM:roomId:ROLE)
-                if (parts.length === 3) {
-                    // legacy 2-player mode
-                    currentRoomId = parts[1].trim();
-                    const role = parts[2].trim().toUpperCase();
-                    if (!rooms.has(currentRoomId)) {
-                        rooms.set(currentRoomId, { players: new Map(), createdAt: Date.now() });
-                    }
-                    const room = rooms.get(currentRoomId);
-                    // استخدم socket id كـ uid
-                    currentUid = `legacy_${role}_${Math.random().toString(36).slice(2,7)}`;
-                    currentName = role;
-                    room.players.set(currentUid, { ws, name: currentName, muted: false });
-                    isRegistered = true;
-                    console.log(`[✓] LEGACY ${role} joined room ${currentRoomId}`);
-                    if (room.players.size >= 2) {
-                        for (const [, p] of room.players) {
-                            try { p.ws.send('READY'); } catch (e) {}
-                        }
-                    }
-                    return;
-                }
                 ws.close(4001, 'Malformed registration');
                 return;
             }
 
             currentRoomId = parts[1].trim();
             currentUid = parts[3].trim();
-            // name قد يحتوي على نقاط، نأخذ كل ما تبقى
             currentName = parts.slice(4).join(':').trim() || 'Player';
 
             if (!currentRoomId || !currentUid) {
@@ -89,17 +65,17 @@ wss.on('connection', (ws, req) => {
 
             const room = rooms.get(currentRoomId);
 
-            // إذا كان نفس uid موجوداً (reconnect)، أزل القديم
+            // إذا كان نفس uid موجوداً (reconnect)، استبدل القديم
             if (room.players.has(currentUid)) {
                 const old = room.players.get(currentUid);
-                try { old.ws.close(4006, 'Replaced by new connection'); } catch (e) {}
+                try { old.ws.close(4006, 'Replaced'); } catch (e) {}
                 room.players.delete(currentUid);
             }
 
             room.players.set(currentUid, { ws, name: currentName, muted: false });
             isRegistered = true;
 
-            console.log(`[✓] ${currentUid} (${currentName}) joined room ${currentRoomId} — total: ${room.players.size}`);
+            console.log(`[✓] ${currentUid} (${currentName}) joined ${currentRoomId} — total: ${room.players.size}`);
 
             // أرسل قائمة اللاعبين الحاليين إلى الوافد الجديد
             const existingPeers = [];
@@ -153,14 +129,20 @@ wss.on('connection', (ws, req) => {
             return;
         }
 
-        // بيانات صوتية (binary) → broadcast للجميع ما عدا المرسل
+        // ─── بيانات صوتية (binary) ───
+        // تنسيق البث: [1 byte uidLen][uidLen bytes uid][PCM packet]
         const me = room.players.get(currentUid);
-        if (me && me.muted) return; // لا تبث لو المايك مكتوم
+        if (me && me.muted) return; // المايك مكتوم — لا تبث
+
+        const uidBytes = Buffer.from(currentUid, 'utf8');
+        if (uidBytes.length > 250) return; // حماية
+        const lenBuf = Buffer.from([uidBytes.length]);
+        const prefixed = Buffer.concat([lenBuf, uidBytes, data]);
 
         for (const [uid, p] of room.players) {
             if (uid === currentUid) continue;
             if (p.ws.readyState === WebSocket.OPEN) {
-                try { p.ws.send(data); } catch (e) {}
+                try { p.ws.send(prefixed); } catch (e) {}
             }
         }
     });
@@ -213,15 +195,12 @@ setInterval(() => {
     });
 }, 30000);
 
-// Cleanup stale rooms (idle > 30 min)
+// تنظيف الغرف الفارغة
 setInterval(() => {
     const now = Date.now();
     for (const [roomId, room] of rooms.entries()) {
-        if (room.players.size === 0 || (now - room.createdAt > 1800000 && room.players.size === 0)) {
-            console.log(`[x] Room ${roomId} expired`);
-            for (const [, p] of room.players) {
-                try { p.ws.close(4005, 'Room expired'); } catch (e) {}
-            }
+        if (room.players.size === 0) {
+            console.log(`[x] Room ${roomId} expired (empty)`);
             rooms.delete(roomId);
         }
     }
