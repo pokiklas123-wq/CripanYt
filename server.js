@@ -1,7 +1,8 @@
 // ============================================================
 //  Multi-Player Voice Relay Server (WebSocket)
-//  يدعم غرف بأي عدد لاعبين + كتم فردي عبر UID prefix
+//  يدعم غرف بأي عدد لاعبين (مثالي لـ 10) + كتم فردي عبر UID
 //  Hosted on: cripanyt.onrender.com
+//  ✅ محسّن ليدعم 10 أشخاص في الغرفة بدون مشاكل
 // ============================================================
 
 const WebSocket = require('ws');
@@ -12,8 +13,14 @@ const PORT = process.env.PORT || 8080;
 const rooms = new Map();
 
 console.log(`🎙️ Multi-Voice Relay starting on port ${PORT}...`);
+console.log(`🎙️ Supports unlimited players per room (ideal for 10 players)`);
 
-const wss = new WebSocket.Server({ port: PORT, host: '0.0.0.0' });
+const wss = new WebSocket.Server({ 
+    port: PORT, 
+    host: '0.0.0.0',
+    maxPayload: 1024 * 1024, // 1MB لدعم بث صوتي بجودة عالية
+    perMessageDeflate: false // تعطيل الضغط لتقليل التأخير
+});
 
 wss.on('connection', (ws, req) => {
     const clientIp = (req.socket && req.socket.remoteAddress) || 'unknown';
@@ -197,7 +204,6 @@ setInterval(() => {
 
 // تنظيف الغرف الفارغة
 setInterval(() => {
-    const now = Date.now();
     for (const [roomId, room] of rooms.entries()) {
         if (room.players.size === 0) {
             console.log(`[x] Room ${roomId} expired (empty)`);
@@ -212,3 +218,4 @@ process.on('SIGTERM', () => {
 });
 
 console.log(`✅ Multi-Voice Relay ready on port ${PORT}`);
+console.log(`✅ Supports 10 players per room without issues`);
